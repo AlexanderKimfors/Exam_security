@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
-from com import SerialClient
+#from com import SerialClient
+import serial
 
 BTN_Y = 7
 BTN_LENGTH = 150
@@ -10,10 +11,10 @@ BTN_2_X = BTN_1_X + BTN_LENGTH + 7
 BTN_3_X = BTN_2_X + BTN_LENGTH + 7
 
 SERIAL_SPEED = 115200
-SERIAL_PORT = "/dev/ttyUSB1"
+SERIAL_PORT = "/dev/ttyUSB0"
 
-MSG_TEMP = b"temperature"
-MSG_LED_TOGGLE = b"toggle LED"
+MSG_TEMP = b"temperature\n"
+MSG_LED_TOGGLE = b"toggle LED\n"
 
 
 class Window(QWidget):
@@ -62,20 +63,25 @@ class Window(QWidget):
 
         self.session_active = False
 
-        self.serial = SerialClient(SERIAL_PORT, SERIAL_SPEED)
+        self.serial = serial.Serial(
+            port=SERIAL_PORT,
+            baudrate=SERIAL_SPEED,
+            timeout=1
+            )
 
 
     def handle_session(self):
         if not self.session_active:
             print("Establishing session...")
-            self.serial.open()
+            if not self.serial.is_open:
+                self.serial.open()
             self.session_active = True
             self.btn_session.setText("Close session")
             self.btn_temp.setEnabled(True)
             self.btn_led.setEnabled(True)
         else:
             print("Closing session...")
-            self.serial.send(b"session closed\n")
+            self.serial.write(b"session closed\n")
             self.serial.close()
             self.session_active = False
             self.btn_session.setText("Establish session")
@@ -84,9 +90,16 @@ class Window(QWidget):
 
 
     def get_temperature(self):
-        self.serial.send(MSG_TEMP)
+        self.serial.reset_input_buffer()
+        self.serial.write(MSG_TEMP)
+
+        line = self.serial.readline().decode("utf-8").strip() # Read until \n and make the result to a string without \n \r space and tabs
+
+        temperature = float(line)
+        print(f"Temperature: {temperature:.2f} °C")
+
         print("Get temperature pressed")
 
     def toggle_led(self):
-        self.serial.send(MSG_LED_TOGGLE)
+        self.serial.write(MSG_LED_TOGGLE)
         print("Toggle LED pressed")
