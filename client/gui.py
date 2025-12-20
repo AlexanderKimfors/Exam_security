@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
+from com import SerialClient
 
 BTN_Y = 7
 BTN_LENGTH = 150
@@ -8,6 +9,11 @@ BTN_1_X = 7
 BTN_2_X = BTN_1_X + BTN_LENGTH + 7
 BTN_3_X = BTN_2_X + BTN_LENGTH + 7
 
+SERIAL_SPEED = 115200
+SERIAL_PORT = "/dev/ttyUSB1"
+
+MSG_TEMP = b"temperature"
+MSG_LED_TOGGLE = b"toggle LED"
 
 
 class Window(QWidget):
@@ -56,16 +62,21 @@ class Window(QWidget):
 
         self.session_active = False
 
+        self.serial = SerialClient(SERIAL_PORT, SERIAL_SPEED)
+
 
     def handle_session(self):
         if not self.session_active:
             print("Establishing session...")
+            self.serial.open()
             self.session_active = True
             self.btn_session.setText("Close session")
             self.btn_temp.setEnabled(True)
             self.btn_led.setEnabled(True)
         else:
             print("Closing session...")
+            self.serial.send(b"session closed\n")
+            self.serial.close()
             self.session_active = False
             self.btn_session.setText("Establish session")
             self.btn_temp.setEnabled(False)
@@ -73,7 +84,9 @@ class Window(QWidget):
 
 
     def get_temperature(self):
+        self.serial.send(MSG_TEMP)
         print("Get temperature pressed")
 
     def toggle_led(self):
+        self.serial.send(MSG_LED_TOGGLE)
         print("Toggle LED pressed")
