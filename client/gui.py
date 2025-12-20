@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
-import serial
+import serial, sys
 
 BTN_Y = 7
 BTN_LENGTH = 150
@@ -9,8 +9,7 @@ BTN_1_X = 7
 BTN_2_X = BTN_1_X + BTN_LENGTH + 7
 BTN_3_X = BTN_2_X + BTN_LENGTH + 7
 
-SERIAL_SPEED = 115200
-SERIAL_PORT = "/dev/ttyUSB0"
+SERIAL_PORT, SERIAL_SPEED = sys.argv[1].split(":")
 
 MSG_TEMP = b"temperature\n"
 MSG_LED_TOGGLE = b"toggle LED\n"
