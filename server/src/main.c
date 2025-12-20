@@ -30,10 +30,7 @@ void uart_init(void)
 
 void temp_init(void)
 {
-    // temperature_sensor_config_t temp_config = {
-    //     .range_min = 10,
-    //     .range_max = 50,
-    // };
+
     temperature_sensor_config_t temp_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 50);
     ESP_ERROR_CHECK(temperature_sensor_install(&temp_config, &temp_handle));
     ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
@@ -90,8 +87,7 @@ void app_main(void)
             {
                 ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &temperature));
                 int len = snprintf((char *)tx_buf, sizeof(tx_buf), "%.2f\n", temperature);
-                printf("Temperature in %f °C\n", temperature);
-                // int len = snprintf((char *)tx_buf, sizeof(tx_buf), "32.5\n");
+
                 uart_write_bytes(UART_PORT, tx_buf, len);
             }
         }

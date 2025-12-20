@@ -1,5 +1,4 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
-#from com import SerialClient
 import serial
 
 BTN_Y = 7
