@@ -53,6 +53,13 @@ void led_init(void)
     gpio_set_level(LED_GPIO, 0);
 }
 
+/**
+ * @brief This function make sure we read a hole request thats ends with '\n'
+ *
+ * @param rx_buf
+ * @return true if we successfully read a request from the buffer
+ * @return false if we failed to read a request from the buffer
+ */
 bool read_request(uint8_t *rx_buf)
 {
     uint8_t rx_buf_temp[BUF_SIZE];
@@ -70,17 +77,17 @@ bool read_request(uint8_t *rx_buf)
 
         if (n > 0)
         {
+            if (total_len >= BUF_SIZE - 1)
+            {
+                break;
+            }
+
             total_len += n;
-            if ((char)rx_buf_temp[total_len - 1] == '\n')
+            if ((char)rx_buf_temp[total_len - 1] == '\n') // End of request
             {
                 rx_buf_temp[total_len - 1] = '\0'; // removes '\n'
                 memcpy(rx_buf, rx_buf_temp, total_len);
                 status = true;
-                break;
-            }
-
-            if (total_len >= BUF_SIZE - 1)
-            {
                 break;
             }
         }
