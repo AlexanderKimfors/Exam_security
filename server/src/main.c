@@ -11,6 +11,10 @@
 
 #define LED_GPIO GPIO_NUM_4
 
+#define GET_TEMP_MSG "temperature"
+#define TOGGLE_LED_MSG "toggle LED"
+#define CLOSE_SESSION_MSG "session closed"
+
 temperature_sensor_handle_t temp_handle = NULL;
 
 void uart_init(void)
@@ -49,11 +53,49 @@ void led_init(void)
     gpio_set_level(LED_GPIO, 0);
 }
 
+bool read_request(uint8_t *rx_buf)
+{
+    uint8_t rx_buf_temp[BUF_SIZE];
+    size_t total_len = 0; // total read length
+    size_t n = 0;         // last read length
+    bool status = false;
+
+    while (true)
+    {
+        n = uart_read_bytes(
+            UART_PORT,
+            rx_buf_temp + total_len,
+            BUF_SIZE - 1 - total_len,
+            pdMS_TO_TICKS(100));
+
+        if (n > 0)
+        {
+            total_len += n;
+            if ((char)rx_buf_temp[total_len - 1] == '\n')
+            {
+                rx_buf_temp[total_len - 1] = '\0'; // removes '\n'
+                memcpy(rx_buf, rx_buf_temp, total_len);
+                status = true;
+                break;
+            }
+
+            if (total_len >= BUF_SIZE - 1)
+            {
+                break;
+            }
+        }
+    }
+
+    return status;
+}
+
 void app_main(void)
 {
     uart_init();
     led_init();
     temp_init();
+
+    uart_flush(UART_PORT); // cleaning the buffer from old data
 
     uint8_t rx_buf[BUF_SIZE]; // Receive data
     uint8_t tx_buf[BUF_SIZE]; // Send data
@@ -62,34 +104,29 @@ void app_main(void)
 
     while (1)
     {
-        int len = uart_read_bytes(
-            UART_PORT,
-            rx_buf,
-            BUF_SIZE - 1,
-            pdMS_TO_TICKS(100));
-
-        if (len > 0)
+        if (read_request(rx_buf))
         {
-            rx_buf[strcspn((char *)rx_buf, "\r\n")] = 0;
-            rx_buf[len] = '\0';
-
-            if (strcmp((char *)rx_buf, "toggle LED") == 0)
+            if (strcmp((char *)rx_buf, TOGGLE_LED_MSG) == 0)
             {
                 led_state = !led_state;
                 gpio_set_level(LED_GPIO, led_state);
             }
-            else if (strcmp((char *)rx_buf, "session closed") == 0)
+            else if (strcmp((char *)rx_buf, CLOSE_SESSION_MSG) == 0)
             {
                 led_state = 0;
                 gpio_set_level(LED_GPIO, 0);
             }
-            else if (strcmp((char *)rx_buf, "temperature") == 0)
+            else if (strcmp((char *)rx_buf, GET_TEMP_MSG) == 0)
             {
                 ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &temperature));
                 int len = snprintf((char *)tx_buf, sizeof(tx_buf), "%.2f\n", temperature);
 
                 uart_write_bytes(UART_PORT, tx_buf, len);
             }
+        }
+        else
+        {
+            // How to handle if we couldent read from uart?
         }
     }
 }

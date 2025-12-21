@@ -1,13 +1,15 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
 import serial, sys
 
-BTN_Y = 7
+BTN_OFFSET = 7
+
+BTN_Y = BTN_OFFSET
 BTN_LENGTH = 150
 BTN_WIDTH = 25
 
-BTN_1_X = 7
-BTN_2_X = BTN_1_X + BTN_LENGTH + 7
-BTN_3_X = BTN_2_X + BTN_LENGTH + 7
+BTN_1_X = BTN_OFFSET
+BTN_2_X = BTN_1_X + BTN_LENGTH + BTN_OFFSET
+BTN_3_X = BTN_2_X + BTN_LENGTH + BTN_OFFSET
 
 SERIAL_PORT, SERIAL_SPEED = sys.argv[1].split(":")
 
@@ -88,16 +90,15 @@ class Window(QWidget):
 
 
     def get_temperature(self):
+        print("Get temperature pressed")
         self.serial.reset_input_buffer()
         self.serial.write(MSG_TEMP)
 
         line = self.serial.readline().decode("utf-8").strip() # Read until \n and make the result to a string without \n \r space and tabs
 
-        temperature = float(line)
-        print(f"Temperature: {temperature:.2f} °C")
+        print(f"Temperature: {line} °C")
 
-        print("Get temperature pressed")
 
     def toggle_led(self):
-        self.serial.write(MSG_LED_TOGGLE)
         print("Toggle LED pressed")
+        self.serial.write(MSG_LED_TOGGLE)
