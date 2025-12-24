@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
-import serial, sys
+from communication import Communication
 
 BTN_OFFSET = 7
 
@@ -10,8 +10,6 @@ BTN_WIDTH = 25
 BTN_1_X = BTN_OFFSET
 BTN_2_X = BTN_1_X + BTN_LENGTH + BTN_OFFSET
 BTN_3_X = BTN_2_X + BTN_LENGTH + BTN_OFFSET
-
-SERIAL_PORT, SERIAL_SPEED = sys.argv[1].split(":")
 
 MSG_TEMP = b"temperature\n"
 MSG_LED_TOGGLE = b"toggle LED\n"
@@ -63,26 +61,21 @@ class Window(QWidget):
 
         self.session_active = False
 
-        self.serial = serial.Serial(
-            port=SERIAL_PORT,
-            baudrate=SERIAL_SPEED,
-            timeout=1
-            )
+        self.__com = Communication()
 
 
     def handle_session(self):
         if not self.session_active:
             print("Establishing session...")
-            if not self.serial.is_open:
-                self.serial.open()
+            self.__com.open()
             self.session_active = True
             self.btn_session.setText("Close session")
             self.btn_temp.setEnabled(True)
             self.btn_led.setEnabled(True)
         else:
             print("Closing session...")
-            self.serial.write(b"session closed\n")
-            self.serial.close()
+            self.__com.send(b"session closed\n")
+            self.__com.close()
             self.session_active = False
             self.btn_session.setText("Establish session")
             self.btn_temp.setEnabled(False)
@@ -91,14 +84,13 @@ class Window(QWidget):
 
     def get_temperature(self):
         print("Get temperature pressed")
-        self.serial.reset_input_buffer()
-        self.serial.write(MSG_TEMP)
+        self.__com.send(MSG_TEMP)
 
-        line = self.serial.readline().decode("utf-8").strip() # Read until \n and make the result to a string without \n \r space and tabs
+        data = self.__com.receive(4)
 
-        print(f"Temperature: {line} °C")
+        print(f"Temperature: {data.decode()} °C")
 
 
     def toggle_led(self):
         print("Toggle LED pressed")
-        self.serial.write(MSG_LED_TOGGLE)
+        self.__com.send(MSG_LED_TOGGLE)
