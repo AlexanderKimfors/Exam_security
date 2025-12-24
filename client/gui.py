@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QPushButton
-from communication import Communication
+from session import Session
 
 BTN_OFFSET = 7
 
@@ -10,9 +10,6 @@ BTN_WIDTH = 25
 BTN_1_X = BTN_OFFSET
 BTN_2_X = BTN_1_X + BTN_LENGTH + BTN_OFFSET
 BTN_3_X = BTN_2_X + BTN_LENGTH + BTN_OFFSET
-
-MSG_TEMP = b"temperature\n"
-MSG_LED_TOGGLE = b"toggle LED\n"
 
 
 class Window(QWidget):
@@ -61,36 +58,33 @@ class Window(QWidget):
 
         self.session_active = False
 
-        self.__com = Communication()
+        self.__session = Session()
 
 
     def handle_session(self):
         if not self.session_active:
             print("Establishing session...")
-            self.__com.open()
+            self.__session.establish_session()
             self.session_active = True
             self.btn_session.setText("Close session")
             self.btn_temp.setEnabled(True)
             self.btn_led.setEnabled(True)
         else:
             print("Closing session...")
-            self.__com.send(b"session closed\n")
-            self.__com.close()
+            self.__session.close_session()
             self.session_active = False
             self.btn_session.setText("Establish session")
             self.btn_temp.setEnabled(False)
             self.btn_led.setEnabled(False)
 
 
-    def get_temperature(self):
+    def get_temperature(self) -> float:
         print("Get temperature pressed")
-        self.__com.send(MSG_TEMP)
+        temperature = self.__session.get_temperature()
 
-        data = self.__com.receive(4)
-
-        print(f"Temperature: {data.decode()} °C")
+        print(f"Temperature: {temperature} °C")
 
 
     def toggle_led(self):
         print("Toggle LED pressed")
-        self.__com.send(MSG_LED_TOGGLE)
+        self.__session.toggle_led()

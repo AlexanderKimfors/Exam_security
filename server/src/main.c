@@ -126,9 +126,9 @@ void app_main(void)
             else if (strcmp((char *)rx_buf, GET_TEMP_MSG) == 0)
             {
                 ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &temperature));
-                int len = snprintf((char *)tx_buf, sizeof(tx_buf), "%.2f", temperature);
+                // int len = snprintf((char *)tx_buf, sizeof(tx_buf), "%.2f", temperature);
 
-                uart_write_bytes(UART_PORT, tx_buf, len);
+                uart_write_bytes(UART_PORT, (uint8_t *)&temperature, sizeof(float));
             }
         }
         else
