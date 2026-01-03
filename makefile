@@ -3,7 +3,7 @@ PORT = /dev/ttyUSB0
 SECRET = sadfhj9283ru982iwuh*?sdf_12-3ddq
 
 client:
-	python3 client/main.py $(PORT):$(SPEED)
+	python3 client/main.py $(PORT):$(SPEED) $(SECRET)
 
 server:
 	cd server; \
