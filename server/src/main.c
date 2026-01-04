@@ -21,60 +21,51 @@
 
 #define LED_GPIO GPIO_NUM_4
 
-#define GET_TEMP_MSG "temperature"
-#define TOGGLE_LED_MSG "toggle LED"
-#define CLOSE_SESSION_MSG "session closed"
-
 #define SECRET "sadfhj9283ru982iwuh*?sdf_12-3ddq"
 
 #define AES_KEY_SIZE 32
 #define IV_SIZE 12
 #define TAG_SIZE 16
-#define AAD_SIZE 8
-#define MSG_LEN 32
-#define SESSION_ID_LEN 8
-#define HANDSHAKE_1_MSG_SIZE (AES_KEY_SIZE + AAD_SIZE)
-#define HANDSHAKE_2_MSG_SIZE 8
-
-#define REQ_MSG_SIZE (IV_SIZE + MSG_LEN + TAG_SIZE)
-#define EST_SES_MSG_SIZE (IV_SIZE + MSG_LEN + TAG_SIZE + SESSION_ID_LEN)
+#define SESSION_ID_SIZE 8
+#define RAND_SIZE 8
+#define TIME_STAMP_SIZE 8
+#define MSG_LEN 32 // The size of a message when session is established
+#define BYTE_SIZE 8
 
 typedef struct
 {
     bool active;
-    uint8_t session_key[AES_KEY_SIZE];
-    uint8_t session_id[SESSION_ID_LEN];
+    uint8_t key[AES_KEY_SIZE];
+    uint8_t id[SESSION_ID_SIZE];
 } session_t;
 
-// AES_GCM data
-static uint8_t iv[IV_SIZE];   // Nonce
-static uint8_t tag[TAG_SIZE]; // Taggen i AES-256-GCM
-// static uint8_t plaintext[MSG_LEN];        // Meddelandet
-// static uint8_t ciphertext[MSG_LEN];       // Krypterade meddelandet
+/*==================== AES_GCM data ========================== */
+static uint8_t iv[IV_SIZE];               // Nonce
+static uint8_t tag[TAG_SIZE];             // Taggen i AES-256-GCM
 static mbedtls_gcm_context gcm;           // håller AES-256-GCM interna tillstånd
 static mbedtls_entropy_context entropy;   // samlar slump
 static mbedtls_ctr_drbg_context ctr_drbg; // säker slumpgenerator
 
-// UART data
+/*===================== UART data ============================ */
 static uint8_t rx_buf[UART_BUF_SIZE]; // Receive data
 static uint8_t tx_buf[UART_BUF_SIZE]; // Send data
 
-// ESP data
+/*===================== ESP data ============================= */
 static temperature_sensor_handle_t temp_handle = NULL;
 
-// Program data
+/*==================== Program data ========================== */
 static session_t session;
 
+static void led_init(void);
 static void uart_init(void);
 static void temp_init(void);
-static void led_init(void);
 static void random_init(void);
-static bool get_request();
-static bool establish_session();
-static void set_rtc_from_timestamp(uint64_t timestamp_us);
+static bool get_request(void);
+static bool establish_session(void);
 static void gcm_init(const uint8_t *key);
-static bool handle_handshake_1(uint8_t *key, uint8_t *AAD, uint8_t *session_id);
-static bool handle_handshake_2(uint8_t *key, uint8_t *AAD, uint8_t *session_id);
+static void set_rtc_from_timestamp(uint64_t timestamp_us);
+static bool handle_handshake_1(uint8_t *key, uint8_t *session_id);
+static bool handle_handshake_2(uint8_t *key, uint8_t *session_id);
 
 void app_main(void)
 {
@@ -83,7 +74,7 @@ void app_main(void)
     temp_init();
     random_init();
 
-    uart_flush(UART_PORT); // cleaning the buffer from old data
+    uart_flush(UART_PORT); // Cleaning the buffer from old data
 
     uint8_t led_state = 0;
     float temperature;
@@ -93,48 +84,203 @@ void app_main(void)
         size_t RX_FIFO_SIZE;
         uart_get_buffered_data_len(UART_PORT, &RX_FIFO_SIZE);
 
-        if (RX_FIFO_SIZE == REQ_MSG_SIZE)
+        if (RX_FIFO_SIZE == (IV_SIZE + MSG_LEN + TAG_SIZE))
         {
             get_request();
         }
-        else if (RX_FIFO_SIZE == EST_SES_MSG_SIZE)
+        else if (RX_FIFO_SIZE == (IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE))
         {
             establish_session();
         }
     }
 }
 
-bool establish_session()
+static bool establish_session(void)
 {
-    bool status = true;
+    bool status = false;
     uint8_t aes_key[AES_KEY_SIZE];
-    uint8_t AAD[AAD_SIZE] = {0};
-    uint8_t session_id[SESSION_ID_LEN];
+    uint8_t session_id[SESSION_ID_SIZE] = {0};
     int ret = 0;
+    ret = uart_read_bytes(UART_PORT, rx_buf, IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE, UART_WAIT_TCKS);
 
-    ret = uart_read_bytes(UART_PORT, rx_buf, EST_SES_MSG_SIZE, UART_WAIT_TCKS);
-
-    if (ret == EST_SES_MSG_SIZE)
+    if (ret == IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE)
     {
-        status = handle_handshake_1(aes_key, AAD, session_id);
+        status = handle_handshake_1(aes_key, session_id);
 
         if (status)
         {
+            ret = uart_read_bytes(UART_PORT, rx_buf, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE, UART_WAIT_TCKS);
 
-            ret = uart_read_bytes(UART_PORT, rx_buf, IV_SIZE + HANDSHAKE_2_MSG_SIZE + TAG_SIZE, UART_WAIT_TCKS);
-
-            if (ret == IV_SIZE + HANDSHAKE_2_MSG_SIZE + TAG_SIZE)
+            if (ret == IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE)
             {
-                handle_handshake_2(aes_key, AAD, session_id);
+                if (handle_handshake_2(aes_key, session_id))
+                {
+                    status = true;
+                }
+            }
+        }
+    }
 
-                status = true; // Ändra så att status kollas och ändras längs funktionen
+    return status;
+}
+
+static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
+{
+    bool status = false;
+    uint8_t plaintext[AES_KEY_SIZE + SESSION_ID_SIZE];
+    uint8_t ciphertext[AES_KEY_SIZE + SESSION_ID_SIZE];
+    uint8_t rand[RAND_SIZE];
+    int ret = 0;
+
+    /* Extract the individual components from the received message */
+    memcpy(iv, rx_buf, IV_SIZE);
+    memcpy(ciphertext, rx_buf + IV_SIZE, AES_KEY_SIZE + RAND_SIZE);
+    memcpy(tag, rx_buf + IV_SIZE + AES_KEY_SIZE + RAND_SIZE, TAG_SIZE);
+
+    /* Convert SECRET to uint8_t array */
+    memcpy(key, SECRET, AES_KEY_SIZE);
+
+    gcm_init(key);
+
+    ret = mbedtls_gcm_auth_decrypt(
+        &gcm,
+        AES_KEY_SIZE + RAND_SIZE, // Size of the msg
+        iv,
+        IV_SIZE,
+        session_id, // AAD
+        SESSION_ID_SIZE,
+        tag,
+        TAG_SIZE,
+        ciphertext,
+        plaintext);
+
+    if (ret == 0)
+    {
+        /* Extract the AES_KEY */
+        memcpy(key, plaintext, AES_KEY_SIZE);
+
+        /* Extract the RAND */
+        memcpy(rand, plaintext + AES_KEY_SIZE, RAND_SIZE);
+
+        gcm_init(key);
+
+        if ((mbedtls_ctr_drbg_random(&ctr_drbg, session_id, SESSION_ID_SIZE) == 0) && (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0))
+        {
+
+            ret = mbedtls_gcm_crypt_and_tag(
+                &gcm,
+                MBEDTLS_GCM_ENCRYPT,
+                SESSION_ID_SIZE, // Size of the msg
+                iv,
+                IV_SIZE,
+                rand, // AAD
+                RAND_SIZE,
+                session_id, // Plaintext msg to be encrypted
+                ciphertext,
+                TAG_SIZE,
+                tag);
+
+            if (ret == 0)
+            {
+                uint8_t response[IV_SIZE + SESSION_ID_SIZE + TAG_SIZE];
+                memcpy(response, iv, IV_SIZE);
+                memcpy(response + IV_SIZE, ciphertext, SESSION_ID_SIZE);
+                memcpy(response + IV_SIZE + SESSION_ID_SIZE, tag, TAG_SIZE);
+
+                ret = uart_write_bytes(UART_PORT, response, IV_SIZE + SESSION_ID_SIZE + TAG_SIZE);
+
+                if (ret == IV_SIZE + SESSION_ID_SIZE + TAG_SIZE)
+                {
+                    status = true;
+                }
             }
         }
     }
     return status;
 }
 
-bool get_request(uint8_t *rx_buf)
+static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
+{
+    bool status = false;
+    uint8_t plaintext[TIME_STAMP_SIZE];
+    uint8_t ciphertext[TIME_STAMP_SIZE];
+
+    /* Extract the individual components from the received message */
+    memcpy(iv, rx_buf, IV_SIZE);
+    memcpy(ciphertext, rx_buf + IV_SIZE, TIME_STAMP_SIZE);
+    memcpy(tag, rx_buf + IV_SIZE + TIME_STAMP_SIZE, TAG_SIZE);
+
+    /* Mbed TLS requires the GCM context to be reinitialized every time */
+    gcm_init(key);
+
+    int ret = mbedtls_gcm_auth_decrypt(
+        &gcm,
+        TIME_STAMP_SIZE, // Size of the msg
+        iv,
+        IV_SIZE,
+        session_id, // AAD
+        SESSION_ID_SIZE,
+        tag,
+        TAG_SIZE,
+        ciphertext,
+        plaintext);
+
+    if (ret == 0)
+    {
+        /* Convert timestamp (big-endian) to uint64 */
+        uint64_t timestamp_us = 0;
+        for (int i = 0; i < BYTE_SIZE; i++)
+        {
+            timestamp_us = (timestamp_us << BYTE_SIZE) | plaintext[i];
+        }
+
+        set_rtc_from_timestamp(timestamp_us);
+
+        if (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0)
+        {
+            /* Mbed TLS requires the GCM context to be reinitialized every time */
+            gcm_init(key);
+
+            ret = mbedtls_gcm_crypt_and_tag(
+                &gcm,
+                MBEDTLS_GCM_ENCRYPT,
+                TIME_STAMP_SIZE, // Size of the msg
+                iv,
+                IV_SIZE,
+                session_id, // AAD
+                SESSION_ID_SIZE,
+                plaintext, // received timestamp
+                ciphertext,
+                TAG_SIZE,
+                tag);
+
+            if (ret == 0)
+            {
+                uint8_t response[IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE];
+                memcpy(response, iv, IV_SIZE);
+                memcpy(response + IV_SIZE, ciphertext, TIME_STAMP_SIZE);
+                memcpy(response + IV_SIZE + TIME_STAMP_SIZE, tag, TAG_SIZE);
+
+                ret = uart_write_bytes(UART_PORT, response, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE);
+
+                if (ret == IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE)
+                {
+                    /* Establish session */
+                    session.active = true;
+                    memcpy(session.id, session_id, SESSION_ID_SIZE);
+                    memcpy(session.key, key, AES_KEY_SIZE);
+                    status = true;
+
+                    // Set LED to GREEN
+                }
+            }
+        }
+    }
+
+    return status;
+}
+
+bool get_request(void)
 {
 
     return true;
@@ -152,7 +298,6 @@ void set_rtc_from_timestamp(uint64_t timestamp_us)
 
 void temp_init(void)
 {
-
     temperature_sensor_config_t temp_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 50);
     ESP_ERROR_CHECK(temperature_sensor_install(&temp_config, &temp_handle));
     ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
@@ -173,18 +318,16 @@ void led_init(void)
 
 void random_init(void)
 {
-    uint8_t buffer[32];
+    uint8_t buffer[AES_KEY_SIZE];
 
     mbedtls_entropy_init(&entropy);
     mbedtls_ctr_drbg_init(&ctr_drbg);
 
-    // Använder ESP hårdvarans slumpgenerator för att skapa en slump nyckel
     bootloader_random_enable();
     for (size_t i = 0; i < AES_KEY_SIZE; i++)
         buffer[i] = esp_random() & 0xFF;
     bootloader_random_disable();
 
-    // Använder ESP hårdvara random som seed till mbedtls random
     mbedtls_ctr_drbg_seed(&ctr_drbg,
                           mbedtls_entropy_func,
                           &entropy,
@@ -211,171 +354,4 @@ static void gcm_init(const uint8_t *key)
     mbedtls_gcm_free(&gcm);
     mbedtls_gcm_init(&gcm);
     mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, AES_KEY_SIZE * 8);
-}
-
-static bool handle_handshake_1(uint8_t *key, uint8_t *AAD, uint8_t *session_id)
-{
-    bool status = false;
-    uint8_t plaintext[HANDSHAKE_1_MSG_SIZE];
-    uint8_t ciphertext[HANDSHAKE_1_MSG_SIZE];
-    int ret = 0;
-
-    // Bryt ut delarna från meddelandet
-    // [IV 12 bytes, cphr 40 bytes, tag 16 bytes]
-    memcpy(iv, rx_buf, IV_SIZE);
-    memcpy(ciphertext, rx_buf + IV_SIZE, HANDSHAKE_1_MSG_SIZE);
-    memcpy(tag, rx_buf + IV_SIZE + HANDSHAKE_1_MSG_SIZE, TAG_SIZE);
-
-    // Konvertera SECRET till en uint8_t array
-    // char[32] --> uint8_t[32]
-    memcpy(key, SECRET, AES_KEY_SIZE);
-
-    // Initiera AES_GCM med SECRET som nyckel
-    gcm_init(key);
-
-    ret = mbedtls_gcm_auth_decrypt(
-        &gcm,
-        HANDSHAKE_1_MSG_SIZE,
-        iv,
-        IV_SIZE,
-        AAD,
-        AAD_SIZE,
-        tag,
-        TAG_SIZE,
-        ciphertext,
-        plaintext);
-
-    if (ret == 0)
-    {
-        // Spara SESSION_KEY temporärt (de 32 första bitarna från plaintext)
-        memcpy(key, plaintext, AES_KEY_SIZE);
-
-        // Spara RAND (de sista 8 bitarna från est_ses_plain_text) i AAD
-        memcpy(AAD, plaintext + AES_KEY_SIZE, AAD_SIZE);
-
-        // Använd aes_key_temp som nyckeln till AES
-        gcm_init(key);
-
-        // Generera random SESSION_ID[8] och IV[12]
-        mbedtls_ctr_drbg_random(&ctr_drbg, session_id, SESSION_ID_LEN);
-        mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE);
-
-        // Encrtypta SESSION_ID
-        ret = mbedtls_gcm_crypt_and_tag(
-            &gcm,
-            MBEDTLS_GCM_ENCRYPT,
-            SESSION_ID_LEN,
-            iv,
-            IV_SIZE,
-            AAD,
-            AAD_SIZE,
-            session_id, // plaintext msg
-            ciphertext,
-            TAG_SIZE,
-            tag);
-
-        if (ret == 0)
-        {
-            // Skicka (IV, cipher, tag)
-            uint8_t response[IV_SIZE + SESSION_ID_LEN + TAG_SIZE]; // 12 + 8 + 16 = 36
-            memcpy(response, iv, IV_SIZE);
-            memcpy(response + IV_SIZE, ciphertext, SESSION_ID_LEN);
-            memcpy(response + IV_SIZE + SESSION_ID_LEN, tag, TAG_SIZE);
-
-            ret = uart_write_bytes(UART_PORT, response, IV_SIZE + SESSION_ID_LEN + TAG_SIZE);
-
-            if (ret == IV_SIZE + SESSION_ID_LEN + TAG_SIZE)
-            {
-                status = true;
-            }
-        }
-    }
-    return status;
-}
-
-static bool handle_handshake_2(uint8_t *key, uint8_t *AAD, uint8_t *session_id)
-{
-    bool status = false;
-    uint8_t plaintext[HANDSHAKE_2_MSG_SIZE];
-    uint8_t ciphertext[HANDSHAKE_2_MSG_SIZE];
-
-    // Bryt ut delarna från meddelandet
-    // [IV 12 bytes, cphr 40 bytes, tag 16 bytes]
-    memcpy(iv, rx_buf, IV_SIZE);
-    memcpy(ciphertext, rx_buf + IV_SIZE, HANDSHAKE_2_MSG_SIZE);
-    memcpy(tag, rx_buf + IV_SIZE + HANDSHAKE_2_MSG_SIZE, TAG_SIZE);
-
-    // mdebtls har krav att man måste reinitiera GCM varje gång
-    gcm_init(key);
-
-    // Decrypta meddelandet med session_key som nyckel
-    int ret = mbedtls_gcm_auth_decrypt(
-        &gcm,
-        HANDSHAKE_2_MSG_SIZE,
-        iv,
-        IV_SIZE,
-        session_id, // AAD
-        SESSION_ID_LEN,
-        tag,
-        TAG_SIZE,
-        ciphertext,
-        plaintext);
-
-    if (ret == 0)
-    {
-        // Konvertera timestamp (big-endian) till en uint64
-        uint64_t timestamp_us = 0;
-        for (int i = 0; i < 8; i++)
-        {
-            timestamp_us = (timestamp_us << 8) | plaintext[i];
-        }
-
-        // Set RTC till timestamp
-        set_rtc_from_timestamp(timestamp_us);
-
-        // Set LED till grön
-
-        // init session
-        session.active = true;
-        memcpy(session.session_id, session_id, SESSION_ID_LEN);
-        memcpy(session.session_key, key, AES_KEY_SIZE);
-
-        // Generate random IV
-        if (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0)
-        {
-            // Enkryptera time_stamp med AES_GCM och använd session_id som AAD
-            gcm_init(session.session_key);
-
-            ret = mbedtls_gcm_crypt_and_tag(
-                &gcm,
-                MBEDTLS_GCM_ENCRYPT,
-                HANDSHAKE_2_MSG_SIZE, // Storleken på meddelandet som ska skickas
-                iv,
-                IV_SIZE,
-                session_id, // AAD
-                SESSION_ID_LEN,
-                plaintext, // received timestamp
-                ciphertext,
-                TAG_SIZE,
-                tag);
-
-            if (ret == 0)
-            {
-                // Skicka (IV, cipher, tag)
-                uint8_t response[IV_SIZE + HANDSHAKE_2_MSG_SIZE + TAG_SIZE];
-                memcpy(response, iv, IV_SIZE);
-                memcpy(response + IV_SIZE, ciphertext, HANDSHAKE_2_MSG_SIZE);
-                memcpy(response + IV_SIZE + HANDSHAKE_2_MSG_SIZE, tag, TAG_SIZE);
-
-                ret = uart_write_bytes(UART_PORT, response, IV_SIZE + HANDSHAKE_2_MSG_SIZE + TAG_SIZE);
-
-                if (ret == IV_SIZE + HANDSHAKE_2_MSG_SIZE + TAG_SIZE)
-                {
-                    status = true;
-                }
-            }
-        }
-    }
-
-    return status;
 }
