@@ -1,97 +1,93 @@
 from communication import Communication
-from mbedtls import hashlib, cipher
-import struct, random, sys
+from mbedtls import cipher
+import struct, random
 import time
 
-AES_KEY_SIZE = 32
-AES_IV_SIZE = 12
-RAND_SIZE = 8
-
-SECRET = sys.argv[2].encode()
 class Session:
-    def __init__(self):
-        self.__com = Communication()
-        self._session_id = bytes([0,0,0,0,0,0,0,0])
-        self._session_state = False
+    def __init__(self, comparam: str, secret: str):
+        self.__com = Communication(comparam)
+
+        self.__session_state = False
+        self.__session_id = bytes([0,0,0,0,0,0,0,0])
+        self.__secret = secret.encode()
+        self.__TAG_SIZE = 16
+        self.__RAND_SIZE = 8
+        self.__AES_IV_SIZE = 12
+        self.__AES_KEY_SIZE = 32
+        self.__SESSION_ID_SIZE = 8
+        self.__TIME_STAMP_SIZE = 8
+
 
     def establish_session(self) -> bool:
-        # ============== without security ================
-        self.__com.open()
-        # ================================================
 
-
-
-        # ======================================= STEG 1 =======================================
-        # Generate random SESSION_KEY[32], CIV[12], RAND[8]
+        # ======================================= First msg to send =======================================
         random.seed()
-        AES_KEY = random.randbytes(AES_KEY_SIZE)
-        AES_IV = random.randbytes(AES_IV_SIZE)
-        RAND = random.randbytes(RAND_SIZE)
+        AES_KEY = random.randbytes(self.__AES_KEY_SIZE)
+        AES_IV = random.randbytes(self.__AES_IV_SIZE)
+        RAND = random.randbytes(self.__RAND_SIZE)
 
-        #                    KEY                      IV      AAD
-        aes = cipher.AES.new(SECRET, cipher.MODE_GCM, AES_IV, self._session_id)
+        #                                                     AAD
+        aes = cipher.AES.new(self.__secret, cipher.MODE_GCM, AES_IV, self.__session_id)
 
-        # Cipher, tag = encrypt(session_key + RAND) with AES_GCM and use HSECRET as key, CIV as IV and SESSION_ID as AAD
         cphr, tag = aes.encrypt(AES_KEY + RAND)
 
-
-        # Send(CIV + cipher + tag)
-        #[IV 12 bytes, cphr 40 bytes, tag 16 bytes] --> total 12+40+16 = 68 bytes
         message = AES_IV + cphr + tag
         self.__com.send(message)
 
-        # ======================================= STEG 2 =======================================
-        # Läs (decrypt) SESSION_ID med RAND som AAD och AES_KEY som nyckel
-        response = self.__com.receive(36)
+        # ===================================== First msg to receive =======================================
+        response = self.__com.receive(self.__AES_IV_SIZE + self.__SESSION_ID_SIZE + self.__TAG_SIZE)
 
-        AES_IV = response[0:12]
-        cphr = response[12:20]
-        tag = response[20:36]
+        offset = 0
+        AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+        offset += self.__AES_IV_SIZE
+        cphr = response[offset: offset + self.__SESSION_ID_SIZE]
+        offset +=  self.__SESSION_ID_SIZE
+        tag = response[offset : offset + self.__TAG_SIZE]
 
+        #                                                      AAD
         aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, RAND)
-        session_id = aes.decrypt(cphr, tag) # lokalt sparat session_id
+        session_id = aes.decrypt(cphr, tag)
 
-        # Time_stamp = tiden i mikrosekunder
-        timestamp_us = time.time_ns() // 1_000
-        time_bytes = struct.pack(">Q", timestamp_us)
+        # ======================================= Second msg to send =======================================
+        timestamp_us = struct.pack(">Q", time.time_ns() // 1_000)
 
-        # Generera ett nytt IV
-        AES_IV = random.randbytes(AES_IV_SIZE)
+        AES_IV = random.randbytes(self.__AES_IV_SIZE)
 
-        # Encryptera time_stamp med AES_GCM med SESSION_ID som AAD
+        #                                                      AAD
         aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, session_id)
-        cphr, tag = aes.encrypt(time_bytes)
+        cphr, tag = aes.encrypt(timestamp_us)
 
-        #         12     + 8    + 16  = 36 bytes
         message = AES_IV + cphr + tag
         self.__com.send(message)
 
 
-        # ======================================= STEG 3 =======================================
-        # Read (decrypt) time_stamp med AES_GCM och session_id som AAD
-        response = self.__com.receive(36)
+        # ===================================== Second msg to receive ======================================
+        response = self.__com.receive(self.__AES_IV_SIZE + self.__TIME_STAMP_SIZE + self.__TAG_SIZE)
 
-        AES_IV = response[0:12]
-        cphr = response[12:20]
-        tag = response[20:36]
+        offset = 0 
+        AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+        offset += self.__AES_IV_SIZE
+        cphr = response[offset : offset + self.__TIME_STAMP_SIZE]
+        offset += self.__TIME_STAMP_SIZE
+        tag = response[offset : offset + self.__TAG_SIZE]
 
         aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, session_id)
-        timestamp_us_received_bytes = aes.decrypt(cphr, tag) # lokalt sparat session_id
+        timestamp_us_received = aes.decrypt(cphr, tag)
 
-        # Kontrollera om time_stamp mottagit är samma som vi skickade
-        # Om det är samma så sätt SESSION_ID till global SESSION_ID
-        timestamp_us_received = struct.unpack(">Q", timestamp_us_received_bytes)[0]
         if(timestamp_us == timestamp_us_received):
-            self._session_state = True
-            self._session_id = session_id
+            self.__session_state = True
+            self.__session_id = session_id
+        else:
+            # ???
+            pass
         
-        print(self._session_state)
+        #DEBUG
+        print(self.__session_state)
 
-        # Vi har nu skapat en session
 
     def close_session(self):
         # ============== without security ================
-        self.__com.close()
+        pass
         # ================================================
     
 

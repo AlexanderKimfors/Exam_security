@@ -13,7 +13,7 @@ BTN_3_X = BTN_2_X + BTN_LENGTH + BTN_OFFSET
 
 
 class Window(QWidget):
-    def __init__(self):
+    def __init__(self, comparam: str, sessionparam: str):
         super().__init__()
 
         self.setStyleSheet("""
@@ -58,7 +58,7 @@ class Window(QWidget):
 
         self.session_active = False
 
-        self.__session = Session()
+        self.__session = Session(comparam, sessionparam)
 
 
     def handle_session(self):
