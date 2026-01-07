@@ -1,4 +1,4 @@
-SPEED = 115200
+SPEED = 2097152
 PORT = /dev/ttyUSB0
 SECRET = sadfhj9283ru982iwuh*?sdf_12-3ddq
 
@@ -7,7 +7,7 @@ client:
 
 server:
 	cd server; \
-	export PLATFORMIO_BUILD_FLAGS="-DSPEED=$(SPEED)"; \
+	export PLATFORMIO_BUILD_FLAGS="-DSPEED=$(SPEED) -DSECRET=\\\"$(SECRET)\\\""; \
 	pio run -t upload
 
 install:

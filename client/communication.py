@@ -1,18 +1,26 @@
-import serial, sys
-
-SERIAL_PORT, SERIAL_SPEED = sys.argv[1].split(":")
+import serial
 
 class Communication:
-    def __init__(self):
-        self.__serial = serial.Serial()
-        self.__serial.port=SERIAL_PORT
-        self.__serial.baudrate=SERIAL_SPEED
-        self.__serial.bytesize=serial.EIGHTBITS
-        self.__serial.parity=serial.PARITY_NONE
-        self.__serial.stopbits=serial.STOPBITS_ONE
-        self.__serial.timeout=3
-                
+    def __init__(self, param: str):
+        port, speed = param.split(":")
+        speed = int(speed)
 
+        self.__serial = serial.Serial()
+        self.__serial.port=port
+        self.__serial.baudrate=speed
+
+        try:
+            if not self.__serial.is_open:
+                self.__serial.open()
+        except serial.SerialException as e:
+            print(f"Error opening serial communication: {e}")
+            raise
+    
+    def __del__(self):
+        if self.__serial.is_open:
+            self.__serial.close()
+
+                
 
     def send(self, buffer: bytes) -> bool:
         status = False
@@ -41,14 +49,3 @@ class Communication:
         return data
 
 
-    def open(self):
-        try:
-            if not self.__serial.is_open:
-                self.__serial.open()
-        except serial.SerialException as e:
-            print(f"Error opening serial communication: {e}")
-            raise
-
-    def close(self):
-        if self.__serial.is_open:
-            self.__serial.close()
