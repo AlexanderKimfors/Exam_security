@@ -108,10 +108,28 @@ class Session:
 
     def get_temperature(self) -> float:
 
-        # ============== without security ================
-        self.__com.send(b"temperature\n")
-        temp = self.__com.receive(4)
-        return struct.unpack('f',temp)[0]
+        self.__send_request(SessionRequest.GET_TEMP)
+
+        # =========== Ta emot ett paket via UART med IV + temp + TAG ==============
+        response = self.__com.receive(self.__AES_IV_SIZE + 4 + self.__TAG_SIZE)
+
+        # ============== Packa upp meddelandet i IV, cipher, TAG ==================
+        offset = 0
+        AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+        offset += self.__AES_IV_SIZE
+        cphr = response[offset: offset + 4]
+        offset +=  4
+        tag = response[offset : offset + self.__TAG_SIZE]
+
+        # ====================== Dekryptera cipher till temp ======================
+        #                                                      AAD
+        aes = cipher.AES.new(self.__key, cipher.MODE_GCM, AES_IV, self.__session_id)
+        temp = aes.decrypt(cphr, tag)
+
+
+        # Gör om temp fron bytes till float
+
+        return struct.unpack("<f", temp)[0]
         # ================================================
 
     def __send_request(self, req: SessionRequest):

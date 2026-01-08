@@ -31,6 +31,12 @@ typedef struct
     uint8_t id[SESSION_ID_SIZE];
 } session_ctx_t;
 
+typedef union
+{
+    float f;
+    uint8_t b[sizeof(float)];
+} float_bytes_t;
+
 static session_ctx_t session;
 static uint8_t iv[IV_SIZE];
 static uint8_t tag[TAG_SIZE];
@@ -112,10 +118,52 @@ bool session_establish(void)
     return status;
 }
 
-/* Not implemented */
 bool session_send_temperature(float temp)
 {
     bool status = false;
+    int ret;
+    size_t offset = 0;
+    float_bytes_t fb;
+    fb.f = temp;
+
+    uint8_t cipher[sizeof(float)];
+
+    // Generera nytt IV
+    if (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0)
+    {
+        // Initiera GCM
+        gcm_init(session.key);
+
+        // Dekryptera meddelandet
+        ret = mbedtls_gcm_crypt_and_tag(
+            &gcm,
+            MBEDTLS_GCM_ENCRYPT,
+            sizeof(temp), // Size of the msg
+            iv,
+            IV_SIZE,
+            session.id, // AAD
+            SESSION_ID_SIZE,
+            fb.b, // Plaintext msg to be encrypted
+            cipher,
+            TAG_SIZE,
+            tag);
+
+        // Packa IV + meddelandet + TAG i ett paket och skicka via uart med timeout
+        if (ret == 0)
+        {
+            offset = 0;
+            memcpy(tx_buf, iv, IV_SIZE);
+            offset = IV_SIZE;
+            memcpy(tx_buf + offset, cipher, sizeof(temp));
+            offset += sizeof(temp);
+            memcpy(tx_buf + offset, tag, TAG_SIZE);
+
+            if (uart_write(tx_buf, IV_SIZE + sizeof(temp) + TAG_SIZE))
+            {
+                status = true;
+            }
+        }
+    }
 
     return status;
 }
