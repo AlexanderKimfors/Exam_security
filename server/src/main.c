@@ -1,9 +1,15 @@
 #include <stdio.h>
 #include "session.h"
+#include "ws2812b.h"
 #include "driver/gpio.h"
 #include "driver/temperature_sensor.h"
 
 #define LED_GPIO GPIO_NUM_4
+
+#define LED_COLOR_RED 255, 0, 0
+#define LED_COLOR_GREEN 0, 255, 0
+#define LED_COLOR_BLUE 0, 0, 255
+#define LED_COLOR_OFF 0, 0, 0
 
 static temperature_sensor_handle_t temp_handle = NULL;
 
@@ -17,15 +23,17 @@ void app_main(void)
     led_init();
     temp_init();
     session_init();
+    ws2812b_init();
 
     while (true)
     {
 
         if (!session_is_active())
         {
+            ws2812b_set_color(LED_COLOR_RED);
             if (session_establish())
             {
-                // Set LED to green
+                ws2812b_set_color(LED_COLOR_GREEN);
             }
         }
 
