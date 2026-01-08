@@ -115,7 +115,9 @@ bool session_establish(void)
 /* Not implemented */
 bool session_send_temperature(float temp)
 {
-    return false;
+    bool status = false;
+
+    return status;
 }
 
 void session_close(void)
@@ -126,8 +128,6 @@ void session_close(void)
     memset(session.id, 0, SESSION_ID_SIZE);
 
     mbedtls_gcm_free(&gcm);
-
-    // Set LED to red
 }
 
 static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
