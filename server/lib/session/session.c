@@ -59,7 +59,7 @@ void session_init()
     memset(session.key, 0, AES_KEY_SIZE);
     memset(session.id, 0, SESSION_ID_SIZE);
     random_init();
-    uart_init(SPEED);
+    communication_init(SPEED); // Returns a bool (error handling should be implemented)
 }
 
 bool session_is_active(void)
@@ -72,7 +72,7 @@ session_request_t session_get_request(void)
     uint8_t plain_request = 0;
     uint8_t cipher_request = 0;
 
-    uart_read(rx_buf, IV_SIZE + REQUEST_SIZE + TAG_SIZE);
+    communication_read(rx_buf, IV_SIZE + REQUEST_SIZE + TAG_SIZE);
 
     size_t offset = 0;
     memcpy(iv, rx_buf + offset, IV_SIZE);
@@ -158,7 +158,7 @@ bool session_send_temperature(float temp)
             offset += sizeof(temp);
             memcpy(tx_buf + offset, tag, TAG_SIZE);
 
-            if (uart_write(tx_buf, IV_SIZE + sizeof(temp) + TAG_SIZE))
+            if (communication_write(tx_buf, IV_SIZE + sizeof(temp) + TAG_SIZE))
             {
                 status = true;
             }
@@ -186,7 +186,7 @@ static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
     uint8_t rand[RAND_SIZE];
     int ret = 0;
 
-    if (uart_read(rx_buf, IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE))
+    if (communication_read(rx_buf, IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE))
     {
         /* Extract the individual components from the received message */
         size_t offset = 0;
@@ -248,7 +248,7 @@ static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
                     offset += SESSION_ID_SIZE;
                     memcpy(tx_buf + offset, tag, TAG_SIZE);
 
-                    if (uart_write(tx_buf, IV_SIZE + SESSION_ID_SIZE + TAG_SIZE))
+                    if (communication_write(tx_buf, IV_SIZE + SESSION_ID_SIZE + TAG_SIZE))
                     {
                         status = true;
                     }
@@ -266,7 +266,7 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
     uint8_t plaintext[TIME_STAMP_SIZE];
     uint8_t ciphertext[TIME_STAMP_SIZE];
 
-    if (uart_read_timeout(rx_buf, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE, UART_WAIT_TICKS))
+    if (communication_read_timeout(rx_buf, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE, UART_WAIT_TICKS))
     {
         /* Extract the individual components from the received message */
         int offset = 0;
@@ -329,7 +329,7 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
                     offset += TIME_STAMP_SIZE;
                     memcpy(tx_buf + offset, tag, TAG_SIZE);
 
-                    if (uart_write(tx_buf, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE))
+                    if (communication_write(tx_buf, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE))
                     {
                         /* Establish session */
                         session.active = true;

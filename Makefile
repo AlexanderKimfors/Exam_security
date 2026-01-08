@@ -7,7 +7,7 @@ client:
 
 server:
 	cd server; \
-	export PLATFORMIO_BUILD_FLAGS="-DSPEED=$(SPEED) -DSECRET=\\\"$(SECRET)\\\""; \
+	export PLATFORMIO_BUILD_FLAGS="-DSPEED=\\\"$(SPEED)\\\" -DSECRET=\\\"$(SECRET)\\\""; \
 	pio run -t upload
 
 install:

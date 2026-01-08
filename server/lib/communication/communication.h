@@ -5,12 +5,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void uart_init(int speed);
+bool communication_init(const char *params);
 
-bool uart_read_timeout(uint8_t *buf, size_t length, size_t wait_ticks);
+bool communication_read_timeout(uint8_t *buf, size_t length, size_t wait_ticks);
 
-bool uart_read(uint8_t *buf, size_t length);
+bool communication_read(uint8_t *buf, size_t length);
 
-bool uart_write(uint8_t *data, size_t length);
+bool communication_write(uint8_t *data, size_t length);
 
 #endif
