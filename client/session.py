@@ -1,7 +1,14 @@
 from communication import Communication
 from mbedtls import cipher
+from enum import IntEnum
 import struct, random
 import time
+
+
+class SessionRequest(IntEnum):
+    CLOSE = 0
+    GET_TEMP = 1
+    TOGGLE_LED = 2
 
 class Session:
     def __init__(self, comparam: str, secret: str):
@@ -18,6 +25,7 @@ class Session:
         self.__TIME_STAMP_SIZE = 8
 
 
+
     def establish_session(self) -> bool:
 
         # ======================================= First msg to send =======================================
@@ -26,7 +34,7 @@ class Session:
         AES_IV = random.randbytes(self.__AES_IV_SIZE)
         RAND = random.randbytes(self.__RAND_SIZE)
 
-        #                                                     AAD
+        #                                                         AAD
         aes = cipher.AES.new(self.__secret, cipher.MODE_GCM, AES_IV, self.__session_id)
 
         cphr, tag = aes.encrypt(AES_KEY + RAND)
@@ -77,6 +85,7 @@ class Session:
         if(timestamp_us == timestamp_us_received):
             self.__session_state = True
             self.__session_id = session_id
+            self.__key = AES_KEY
         else:
             # ???
             pass
@@ -86,9 +95,8 @@ class Session:
 
 
     def close_session(self):
-        # ============== without security ================
-        pass
-        # ================================================
+        self.__send_request(SessionRequest.CLOSE)
+        self.__session_id = bytes([0,0,0,0,0,0,0,0])
     
 
 
@@ -105,3 +113,11 @@ class Session:
         temp = self.__com.receive(4)
         return struct.unpack('f',temp)[0]
         # ================================================
+
+    def __send_request(self, req: SessionRequest):
+        AES_IV = random.randbytes(self.__AES_IV_SIZE)
+        #                                                         AAD
+        aes = cipher.AES.new(self.__key, cipher.MODE_GCM, AES_IV, self.__session_id)
+        cphr, tag = aes.encrypt(bytes([req]))
+        message = AES_IV + cphr + tag
+        self.__com.send(message)
