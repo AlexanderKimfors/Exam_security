@@ -79,7 +79,11 @@ static void led_init(void)
 
 static float read_temperature(void)
 {
-    return 0.0f;
+    float temperature = 0.0f;
+
+    esp_err_t err = temperature_sensor_get_celsius(temp_handle, &temperature); // Error handeling?
+
+    return temperature;
 }
 
 static void led_toggle(void)
