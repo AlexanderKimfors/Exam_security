@@ -39,16 +39,18 @@ void app_main(void)
 
         switch (session_get_request())
         {
-        case SESSION_REQ_CLOSE:
+        case CLOSE_SESSION:
             session_close();
             break;
 
-        case SESSION_REQ_GET_TEMP:
+        case GET_TEMP:
             session_send_temperature(read_temperature());
             break;
 
-        case SESSION_REQ_TOGGLE_LED:
+        case TOGGLE_LED:
             led_toggle();
+            break;
+        case INVALID:
             break;
 
         default:
@@ -88,4 +90,5 @@ static float read_temperature(void)
 
 static void led_toggle(void)
 {
+    gpio_set_level(LED_GPIO, !gpio_get_level(LED_GPIO));
 }

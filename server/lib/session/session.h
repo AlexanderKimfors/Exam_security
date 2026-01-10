@@ -6,9 +6,10 @@
 
 typedef enum
 {
-    SESSION_REQ_CLOSE = 0,
-    SESSION_REQ_GET_TEMP,
-    SESSION_REQ_TOGGLE_LED
+    INVALID = -1,
+    CLOSE_SESSION = 0,
+    GET_TEMP,
+    TOGGLE_LED
 } session_request_t;
 
 void session_init(void);

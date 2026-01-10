@@ -105,11 +105,10 @@ class Session:
 
 
     def toggle_led(self) -> str:
-        # ============== without security ================
-        self.__com.send(b"toggle LED\n")
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return (timestamp)
-        # ================================================
+        timestamp_us = self.__send_request(SessionRequest.TOGGLE_LED)
+        timestamp_sec = timestamp_us / 1_000_000
+        timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
+        return timestamp_str
         
 
     def get_temperature(self) -> tuple[float, str]:
@@ -137,10 +136,18 @@ class Session:
         return (temp, timestamp)
     
 
-    def __send_request(self, req: SessionRequest):
+    def __send_request(self, req: SessionRequest) -> int:
+        timestamp_us = time.time_ns() // 1_000
+        timestamp_us_b = struct.pack(">Q", timestamp_us)
+
         AES_IV = random.randbytes(self.__AES_IV_SIZE)
+
         #                                                         AAD
         aes = cipher.AES.new(self.__key, cipher.MODE_GCM, AES_IV, self.__session_id)
-        cphr, tag = aes.encrypt(bytes([req]))
-        message = AES_IV + cphr + tag
-        self.__com.send(message)
+        req_b = struct.pack(">B", req)
+        msg = req_b + timestamp_us_b
+        cphr, tag = aes.encrypt(msg)
+        package = AES_IV + cphr + tag
+        self.__com.send(package)
+
+        return timestamp_us
