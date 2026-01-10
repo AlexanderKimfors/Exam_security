@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QPushButton
+from PyQt6.QtWidgets import QWidget, QPushButton, QTextEdit
 from session import Session
 
 BTN_OFFSET = 7
@@ -56,6 +56,15 @@ class Window(QWidget):
         self.btn_temp.setEnabled(False)
         self.btn_led.setEnabled(False)
 
+        self.log = QTextEdit(self)
+        self.log.setReadOnly(True)
+        self.log.setGeometry(
+        BTN_OFFSET,
+        BTN_Y + BTN_WIDTH + BTN_OFFSET,
+        self.width() - 2 * BTN_OFFSET,
+        self.height() - BTN_WIDTH - 3 * BTN_OFFSET
+        )
+
         self.session_active = False
 
         self.__session = Session(comparam, sessionparam)
@@ -63,14 +72,16 @@ class Window(QWidget):
 
     def handle_session(self):
         if not self.session_active:
-            print("Establishing session...")
-            self.__session.establish_session()
-            self.session_active = True
-            self.btn_session.setText("Close session")
-            self.btn_temp.setEnabled(True)
-            self.btn_led.setEnabled(True)
+            (status, time) = self.__session.establish_session()
+            if(status):
+                self.session_active = True
+                self.btn_session.setText("Close session")
+                self.btn_temp.setEnabled(True)
+                self.btn_led.setEnabled(True)
+                self.log_message(f"Session established at {time}")
+            else:
+                self.log_message("Session establishment failed")
         else:
-            print("Closing session...")
             self.__session.close_session()
             self.session_active = False
             self.btn_session.setText("Establish session")
@@ -79,12 +90,15 @@ class Window(QWidget):
 
 
     def get_temperature(self) -> float:
-        print("Get temperature pressed")
-        temperature = self.__session.get_temperature()
+        (temperature, time) = self.__session.get_temperature()
 
-        print(f"Temperature: {temperature} °C")
+        self.log_message(f"Temperature: {temperature:.2f} °C at {time}"
+    )
 
 
     def toggle_led(self):
-        print("Toggle LED pressed")
-        self.__session.toggle_led()
+        time = self.__session.toggle_led()
+        self.log_message(f"LED toggled at {time}")
+
+    def log_message(self, message: str):
+        self.log.append(message)
