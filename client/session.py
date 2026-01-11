@@ -108,12 +108,15 @@ class Session:
         timestamp_us = self.__send_request(SessionRequest.TOGGLE_LED)
         timestamp_sec = timestamp_us / 1_000_000
         timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
+
         return timestamp_str
         
 
     def get_temperature(self) -> tuple[float, str]:
 
-        self.__send_request(SessionRequest.GET_TEMP)
+        timestamp_us = self.__send_request(SessionRequest.GET_TEMP)
+        timestamp_sec = timestamp_us / 1_000_000
+        timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
 
         # =========== Ta emot ett paket via UART med IV + temp + TAG ==============
         response = self.__com.receive(self.__AES_IV_SIZE + 4 + self.__TAG_SIZE)
@@ -132,8 +135,8 @@ class Session:
         temp = aes.decrypt(cphr, tag)
 
         temp = struct.unpack("<f", temp)[0]
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return (temp, timestamp)
+
+        return (temp, timestamp_str)
     
 
     def __send_request(self, req: SessionRequest) -> int:
@@ -151,3 +154,6 @@ class Session:
         self.__com.send(package)
 
         return timestamp_us
+    
+
+    # från början ver det:  temp = struct.unpack("<f", temp)[0]

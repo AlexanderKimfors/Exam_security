@@ -4,12 +4,17 @@
 #include "driver/gpio.h"
 #include "driver/temperature_sensor.h"
 
-#define LED_GPIO GPIO_NUM_4
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-#define LED_COLOR_RED 255, 0, 0
-#define LED_COLOR_GREEN 0, 255, 0
-#define LED_COLOR_BLUE 0, 0, 255
-#define LED_COLOR_OFF 0, 0, 0
+#define LED_GPIO GPIO_NUM_4
+#define LED_ON 1
+#define LED_OFF 0
+
+#define RGB_LED_COLOR_RED 255, 0, 0
+#define RGB_LED_COLOR_GREEN 0, 255, 0
+#define RGB_LED_COLOR_BLUE 0, 0, 255
+#define RGB_LED_COLOR_OFF 0, 0, 0
 
 static temperature_sensor_handle_t temp_handle = NULL;
 
@@ -24,23 +29,23 @@ void app_main(void)
     temp_init();
     session_init();
     ws2812b_init();
+    ws2812b_set_color(RGB_LED_COLOR_RED);
 
     while (true)
     {
 
         if (!session_is_active())
         {
-            ws2812b_set_color(LED_COLOR_RED);
             if (session_establish())
             {
-                ws2812b_set_color(LED_COLOR_GREEN);
+                ws2812b_set_color(RGB_LED_COLOR_GREEN);
             }
         }
-
         switch (session_get_request())
         {
         case CLOSE_SESSION:
             session_close();
+            ws2812b_set_color(RGB_LED_COLOR_RED);
             break;
 
         case GET_TEMP:
@@ -50,6 +55,7 @@ void app_main(void)
         case TOGGLE_LED:
             led_toggle();
             break;
+
         case INVALID:
             break;
 
@@ -90,5 +96,14 @@ static float read_temperature(void)
 
 static void led_toggle(void)
 {
-    gpio_set_level(LED_GPIO, !gpio_get_level(LED_GPIO));
+    static int state = LED_OFF;
+    if (state)
+    {
+        state = LED_OFF;
+    }
+    else
+    {
+        state = LED_ON;
+    }
+    gpio_set_level(LED_GPIO, state);
 }

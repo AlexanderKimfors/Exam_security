@@ -24,6 +24,8 @@
 
 #define UART_WAIT_TICKS 200
 
+#define SESSION_TIMEOUT_US (60ULL * 1000000ULL)
+
 typedef struct
 {
     bool active;
@@ -90,7 +92,7 @@ session_request_t session_get_request(void)
 
     int ret = mbedtls_gcm_auth_decrypt(
         &gcm,
-        REQUEST_SIZE,
+        REQUEST_SIZE + TIME_STAMP_SIZE,
         iv,
         IV_SIZE,
         session.id,
@@ -99,25 +101,43 @@ session_request_t session_get_request(void)
         TAG_SIZE,
         cipher_request,
         plain_request);
-    /* ================================================================================ */
-
-    /* =================== Extract the request and time from msg ====================== */
-    uint64_t time_stamp = 0;
-
-    memcpy(&req, plain_request, REQUEST_SIZE);
-    memcpy(&time_stamp, plain_request, TIME_STAMP_SIZE);
-    /* ================================================================================ */
-
-    /* ============================== Validate request ================================ */
-    if (time_stamp < session.latest_msg) /* Not valid msg */
+    if (ret != 0)
     {
         req = INVALID;
     }
-    else if ((time_stamp - session.latest_msg) > 60) /* Session expired, close the session */
+    else
     {
-        req = CLOSE_SESSION;
+        /* ================================================================================ */
+
+        /* =================== Extract the request and time from msg ====================== */
+        uint64_t time_stamp = 0;
+
+        // memcpy(&req, plain_request, REQUEST_SIZE);
+        req = (session_request_t)plain_request[0];
+        // memcpy(&time_stamp, plain_request + REQUEST_SIZE, TIME_STAMP_SIZE);
+        for (int i = 0; i < TIME_STAMP_SIZE; i++)
+        {
+            time_stamp = (time_stamp << 8) |
+                         plain_request[REQUEST_SIZE + i];
+        }
+        /* ================================================================================ */
+
+        /* ============================== Validate request ================================ */
+        if (time_stamp < session.latest_msg) /* Not valid msg */
+        {
+            req = INVALID;
+        }
+        else if ((time_stamp - session.latest_msg) > SESSION_TIMEOUT_US) /* Session expired, close the session */
+        {
+
+            req = CLOSE_SESSION;
+        }
+        else
+        {
+            session.latest_msg = time_stamp;
+        }
+        /* ================================================================================ */
     }
-    /* ================================================================================ */
 
     return req;
 }
@@ -196,6 +216,7 @@ void session_close(void)
 
     memset(session.key, 0, AES_KEY_SIZE);
     memset(session.id, 0, SESSION_ID_SIZE);
+    memset(&session.latest_msg, 0, TIME_STAMP_SIZE);
 
     mbedtls_gcm_free(&gcm);
 }
