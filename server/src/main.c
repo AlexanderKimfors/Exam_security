@@ -46,6 +46,7 @@ void app_main(void)
         case CLOSE_SESSION:
             session_close();
             ws2812b_set_color(RGB_LED_COLOR_RED);
+            gpio_set_level(LED_GPIO, LED_OFF);
             break;
 
         case GET_TEMP:
@@ -76,7 +77,7 @@ static void led_init(void)
 {
     gpio_config_t io_config = {
         .pin_bit_mask = (1ULL << LED_GPIO),
-        .mode = GPIO_MODE_OUTPUT,
+        .mode = GPIO_MODE_INPUT_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE};
@@ -89,21 +90,12 @@ static float read_temperature(void)
 {
     float temperature = 0.0f;
 
-    esp_err_t err = temperature_sensor_get_celsius(temp_handle, &temperature); // Error handeling?
+    esp_err_t err = temperature_sensor_get_celsius(temp_handle, &temperature); // Error handling?
 
     return temperature;
 }
 
 static void led_toggle(void)
 {
-    static int state = LED_OFF;
-    if (state)
-    {
-        state = LED_OFF;
-    }
-    else
-    {
-        state = LED_ON;
-    }
-    gpio_set_level(LED_GPIO, state);
+    gpio_set_level(LED_GPIO, !gpio_get_level(LED_GPIO));
 }

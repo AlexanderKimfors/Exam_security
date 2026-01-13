@@ -129,7 +129,6 @@ session_request_t session_get_request(void)
         }
         else if ((time_stamp - session.latest_msg) > SESSION_TIMEOUT_US) /* Session expired, close the session */
         {
-
             req = CLOSE_SESSION;
         }
         else

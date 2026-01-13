@@ -9,6 +9,7 @@ class SessionRequest(IntEnum):
     CLOSE = 0
     GET_TEMP = 1
     TOGGLE_LED = 2
+    TIMEOUT = 3
 
 class Session:
     def __init__(self, comparam: str, secret: str):
@@ -101,7 +102,7 @@ class Session:
     def close_session(self):
         self.__send_request(SessionRequest.CLOSE)
         self.__session_id = bytes([0,0,0,0,0,0,0,0])
-    
+        self.__session_state = False
 
 
     def toggle_led(self) -> str:
@@ -126,15 +127,15 @@ class Session:
         AES_IV = response[offset : offset + self.__AES_IV_SIZE]
         offset += self.__AES_IV_SIZE
         cphr = response[offset: offset + 4]
-        offset +=  4
+        offset += 4
         tag = response[offset : offset + self.__TAG_SIZE]
 
         # ====================== Dekryptera cipher till temp ======================
         #                                                      AAD
         aes = cipher.AES.new(self.__key, cipher.MODE_GCM, AES_IV, self.__session_id)
-        temp = aes.decrypt(cphr, tag)
+        response = aes.decrypt(cphr, tag)
 
-        temp = struct.unpack("<f", temp)[0]
+        temp = struct.unpack("<f", response)[0]
 
         return (temp, timestamp_str)
     
@@ -154,6 +155,3 @@ class Session:
         self.__com.send(package)
 
         return timestamp_us
-    
-
-    # från början ver det:  temp = struct.unpack("<f", temp)[0]
