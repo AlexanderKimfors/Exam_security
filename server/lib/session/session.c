@@ -17,18 +17,21 @@
 #define TAG_SIZE 16
 #define RAND_SIZE 8
 #define TIME_STAMP_SIZE 8
+#define REQUEST_SIZE 1
 
 /* Size in bits */
 #define BYTE_SIZE 8
-#define REQUEST_SIZE 1
 
 #define UART_WAIT_TICKS 200
+
+#define SESSION_TIMEOUT_US (60ULL * 1000000ULL)
 
 typedef struct
 {
     bool active;
     uint8_t key[AES_KEY_SIZE];
     uint8_t id[SESSION_ID_SIZE];
+    uint64_t latest_msg; // timestamp from the latest msg
 } session_ctx_t;
 
 typedef union
@@ -69,17 +72,19 @@ bool session_is_active(void)
 
 session_request_t session_get_request(void)
 {
-    uint8_t plain_request = 0;
-    uint8_t cipher_request = 0;
+    session_request_t req = INVALID;
+    /* ===================== Extract the msg and decrypt it  ========================= */
+    uint8_t plain_request[REQUEST_SIZE + TIME_STAMP_SIZE] = {0};
+    uint8_t cipher_request[REQUEST_SIZE + TIME_STAMP_SIZE] = {0};
 
-    communication_read(rx_buf, IV_SIZE + REQUEST_SIZE + TAG_SIZE);
+    communication_read(rx_buf, IV_SIZE + REQUEST_SIZE + TIME_STAMP_SIZE + TAG_SIZE);
 
     size_t offset = 0;
     memcpy(iv, rx_buf + offset, IV_SIZE);
     offset += IV_SIZE;
 
-    cipher_request = rx_buf[offset];
-    offset += REQUEST_SIZE;
+    memcpy(cipher_request, rx_buf + offset, REQUEST_SIZE + TIME_STAMP_SIZE);
+    offset += REQUEST_SIZE + TIME_STAMP_SIZE;
 
     memcpy(tag, rx_buf + offset, TAG_SIZE);
 
@@ -87,17 +92,53 @@ session_request_t session_get_request(void)
 
     int ret = mbedtls_gcm_auth_decrypt(
         &gcm,
-        REQUEST_SIZE,
+        REQUEST_SIZE + TIME_STAMP_SIZE,
         iv,
         IV_SIZE,
         session.id,
         SESSION_ID_SIZE,
         tag,
         TAG_SIZE,
-        &cipher_request,
-        &plain_request);
+        cipher_request,
+        plain_request);
+    if (ret != 0)
+    {
+        req = INVALID;
+    }
+    else
+    {
+        /* ================================================================================ */
 
-    return (session_request_t)plain_request;
+        /* =================== Extract the request and time from msg ====================== */
+        uint64_t time_stamp = 0;
+
+        // memcpy(&req, plain_request, REQUEST_SIZE);
+        req = (session_request_t)plain_request[0];
+        // memcpy(&time_stamp, plain_request + REQUEST_SIZE, TIME_STAMP_SIZE);
+        for (int i = 0; i < TIME_STAMP_SIZE; i++)
+        {
+            time_stamp = (time_stamp << 8) |
+                         plain_request[REQUEST_SIZE + i];
+        }
+        /* ================================================================================ */
+
+        /* ============================== Validate request ================================ */
+        if (time_stamp < session.latest_msg) /* Not valid msg */
+        {
+            req = INVALID;
+        }
+        else if ((time_stamp - session.latest_msg) > SESSION_TIMEOUT_US) /* Session expired, close the session */
+        {
+            req = CLOSE_SESSION;
+        }
+        else
+        {
+            session.latest_msg = time_stamp;
+        }
+        /* ================================================================================ */
+    }
+
+    return req;
 }
 
 bool session_establish(void)
@@ -174,6 +215,7 @@ void session_close(void)
 
     memset(session.key, 0, AES_KEY_SIZE);
     memset(session.id, 0, SESSION_ID_SIZE);
+    memset(&session.latest_msg, 0, TIME_STAMP_SIZE);
 
     mbedtls_gcm_free(&gcm);
 }
@@ -333,6 +375,7 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
                     {
                         /* Establish session */
                         session.active = true;
+                        session.latest_msg = timestamp_us;
                         memcpy(session.id, session_id, SESSION_ID_SIZE);
                         memcpy(session.key, key, AES_KEY_SIZE);
 

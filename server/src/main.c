@@ -4,12 +4,17 @@
 #include "driver/gpio.h"
 #include "driver/temperature_sensor.h"
 
-#define LED_GPIO GPIO_NUM_4
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-#define LED_COLOR_RED 255, 0, 0
-#define LED_COLOR_GREEN 0, 255, 0
-#define LED_COLOR_BLUE 0, 0, 255
-#define LED_COLOR_OFF 0, 0, 0
+#define LED_GPIO GPIO_NUM_4
+#define LED_ON 1
+#define LED_OFF 0
+
+#define RGB_LED_COLOR_RED 255, 0, 0
+#define RGB_LED_COLOR_GREEN 0, 255, 0
+#define RGB_LED_COLOR_BLUE 0, 0, 255
+#define RGB_LED_COLOR_OFF 0, 0, 0
 
 static temperature_sensor_handle_t temp_handle = NULL;
 
@@ -24,31 +29,35 @@ void app_main(void)
     temp_init();
     session_init();
     ws2812b_init();
+    ws2812b_set_color(RGB_LED_COLOR_RED);
 
     while (true)
     {
 
         if (!session_is_active())
         {
-            ws2812b_set_color(LED_COLOR_RED);
             if (session_establish())
             {
-                ws2812b_set_color(LED_COLOR_GREEN);
+                ws2812b_set_color(RGB_LED_COLOR_GREEN);
             }
         }
-
         switch (session_get_request())
         {
-        case SESSION_REQ_CLOSE:
+        case CLOSE_SESSION:
             session_close();
+            ws2812b_set_color(RGB_LED_COLOR_RED);
+            gpio_set_level(LED_GPIO, LED_OFF);
             break;
 
-        case SESSION_REQ_GET_TEMP:
+        case GET_TEMP:
             session_send_temperature(read_temperature());
             break;
 
-        case SESSION_REQ_TOGGLE_LED:
+        case TOGGLE_LED:
             led_toggle();
+            break;
+
+        case INVALID:
             break;
 
         default:
@@ -68,7 +77,7 @@ static void led_init(void)
 {
     gpio_config_t io_config = {
         .pin_bit_mask = (1ULL << LED_GPIO),
-        .mode = GPIO_MODE_OUTPUT,
+        .mode = GPIO_MODE_INPUT_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE};
@@ -81,11 +90,12 @@ static float read_temperature(void)
 {
     float temperature = 0.0f;
 
-    esp_err_t err = temperature_sensor_get_celsius(temp_handle, &temperature); // Error handeling?
+    esp_err_t err = temperature_sensor_get_celsius(temp_handle, &temperature); // Error handling?
 
     return temperature;
 }
 
 static void led_toggle(void)
 {
+    gpio_set_level(LED_GPIO, !gpio_get_level(LED_GPIO));
 }

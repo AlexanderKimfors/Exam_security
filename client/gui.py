@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QPushButton, QTextEdit
+from PyQt6.QtGui import QCloseEvent
 from session import Session
 
 BTN_OFFSET = 7
@@ -74,23 +75,19 @@ class Window(QWidget):
         if not self.session_active:
             (status, time) = self.__session.establish_session()
             if(status):
-                self.session_active = True
-                self.btn_session.setText("Close session")
-                self.btn_temp.setEnabled(True)
-                self.btn_led.setEnabled(True)
+                self.__open_session()
                 self.log_message(f"Session established at {time}")
             else:
                 self.log_message("Session establishment failed")
         else:
             self.__session.close_session()
-            self.session_active = False
-            self.btn_session.setText("Establish session")
-            self.btn_temp.setEnabled(False)
-            self.btn_led.setEnabled(False)
+            self.__close_session()
 
 
     def get_temperature(self) -> float:
         (temperature, time) = self.__session.get_temperature()
+        if(-100.1 < temperature < -99.9):
+            self.__close_session()
 
         self.log_message(f"Temperature: {temperature:.2f} °C at {time}"
     )
@@ -102,3 +99,21 @@ class Window(QWidget):
 
     def log_message(self, message: str):
         self.log.append(message)
+
+    def closeEvent(self, event: QCloseEvent):
+        if self.session_active:
+            self.__session.close_session()
+        event.accept()
+
+    def __close_session(self):
+        self.session_active = False
+        self.btn_session.setText("Establish session")
+        self.btn_temp.setEnabled(False)
+        self.btn_led.setEnabled(False)
+    
+    def __open_session(self):
+        self.session_active = True
+        self.btn_session.setText("Close session")
+        self.btn_temp.setEnabled(True)
+        self.btn_led.setEnabled(True)
+        
