@@ -2,6 +2,7 @@
 #include "session.h"
 #include <sys/time.h>
 #include "communication.h"
+#include <stdio.h> // För sscanf i hex to bytes funktionen (kan göra på annat sätt?)
 
 #include <esp_random.h>
 #include <bootloader_random.h>
@@ -55,6 +56,7 @@ static void gcm_init(const uint8_t *key);
 static void set_rtc_from_timestamp(uint64_t timestamp_us);
 static bool handle_handshake_1(uint8_t *key, uint8_t *session_id);
 static bool handle_handshake_2(uint8_t *key, uint8_t *session_id);
+static void hex_to_bytes(const char *hex, uint8_t *out, size_t len);
 
 void session_init()
 {
@@ -238,8 +240,7 @@ static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
         offset += AES_KEY_SIZE + RAND_SIZE;
         memcpy(tag, rx_buf + offset, TAG_SIZE);
 
-        /* Convert SECRET to uint8_t array */
-        memcpy(key, SECRET, AES_KEY_SIZE);
+        hex_to_bytes(HSECRET, key, AES_KEY_SIZE);
 
         gcm_init(key);
 
@@ -423,4 +424,12 @@ static void gcm_init(const uint8_t *key)
     mbedtls_gcm_free(&gcm);
     mbedtls_gcm_init(&gcm);
     mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, AES_KEY_SIZE * 8);
+}
+
+static void hex_to_bytes(const char *hex, uint8_t *out, size_t len)
+{
+    for (size_t i = 0; i < len; i++)
+    {
+        sscanf(hex + 2 * i, "%2hhx", &out[i]);
+    }
 }

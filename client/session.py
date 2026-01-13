@@ -3,6 +3,7 @@ from mbedtls import cipher
 from enum import IntEnum
 import struct, random
 import time
+import hashlib
 
 
 class SessionRequest(IntEnum):
@@ -17,7 +18,7 @@ class Session:
 
         self.__session_state = False
         self.__session_id = bytes([0,0,0,0,0,0,0,0])
-        self.__secret = secret.encode()
+        self.__secret = hashlib.sha256(secret.encode()).digest()
         self.__TAG_SIZE = 16
         self.__RAND_SIZE = 8
         self.__AES_IV_SIZE = 12
