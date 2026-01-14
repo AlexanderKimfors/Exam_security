@@ -20,48 +20,54 @@ static temperature_sensor_handle_t temp_handle = NULL;
 
 static void led_init(void);
 static void temp_init(void);
-static void led_toggle(void);
-static float read_temperature(void);
+static bool led_toggle(void);
+static float read_temperature(float *temperature);
 
 void app_main(void)
 {
+    bool status;
     led_init();
     temp_init();
-    session_init();
-    ws2812b_init();
-    ws2812b_set_color(RGB_LED_COLOR_RED);
-
-    while (true)
+    if (session_init())
     {
+        ws2812b_init();
+        ws2812b_set_color(RGB_LED_COLOR_RED);
 
-        if (!session_is_active())
+        while (true)
         {
-            if (session_establish())
+
+            if (!session_is_active())
             {
-                ws2812b_set_color(RGB_LED_COLOR_GREEN);
+                if (session_establish())
+                {
+                    ws2812b_set_color(RGB_LED_COLOR_GREEN);
+                }
             }
-        }
-        switch (session_get_request())
-        {
-        case CLOSE_SESSION:
-            session_close();
-            ws2812b_set_color(RGB_LED_COLOR_RED);
-            gpio_set_level(LED_GPIO, LED_OFF);
-            break;
+            switch (session_get_request())
+            {
+            case CLOSE_SESSION:
+                session_close();
+                ws2812b_set_color(RGB_LED_COLOR_RED);
+                gpio_set_level(LED_GPIO, LED_OFF);
+                break;
 
-        case GET_TEMP:
-            session_send_temperature(read_temperature());
-            break;
+            case GET_TEMP:
+                float temp;
+                status = read_temperature(&temp);
+                session_send_temperature(status, temp);
+                break;
 
-        case TOGGLE_LED:
-            led_toggle();
-            break;
+            case TOGGLE_LED:
+                status = led_toggle();
+                session_send_toggle_led(status, gpio_get_level(LED_GPIO));
+                break;
 
-        case INVALID:
-            break;
+            case INVALID:
+                break;
 
-        default:
-            break;
+            default:
+                break;
+            }
         }
     }
 }
@@ -69,8 +75,13 @@ void app_main(void)
 static void temp_init(void)
 {
     temperature_sensor_config_t temp_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 50);
-    ESP_ERROR_CHECK(temperature_sensor_install(&temp_config, &temp_handle));
-    ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
+
+    temperature_sensor_install(&temp_config, &temp_handle);
+    // ESP_OK if succeed
+
+    temperature_sensor_enable(temp_handle);
+    // ESP_OK Success
+    // ESP_ERR_INVALID_STATE if temperature sensor is enabled already.
 }
 
 static void led_init(void)
@@ -81,21 +92,31 @@ static void led_init(void)
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE};
+
     gpio_config(&io_config);
+    // ESP_OK success
+    // ESP_ERR_INVALID_ARG Parameter error
 
     gpio_set_level(LED_GPIO, 0);
+    // ESP_OK Success
+    // ESP_ERR_INVALID_ARG GPIO number error
 }
 
-static float read_temperature(void)
+static float read_temperature(float *temperature)
 {
-    float temperature = 0.0f;
-
-    esp_err_t err = temperature_sensor_get_celsius(temp_handle, &temperature); // Error handling?
-
-    return temperature;
+    return (ESP_OK == temperature_sensor_get_celsius(temp_handle, temperature));
+    /*
+    ESP_OK Success
+    ESP_ERR_INVALID_ARG invalid arguments
+    ESP_ERR_INVALID_STATE Temperature sensor is not enabled yet.
+    ESP_FAIL Parse the sensor data into ambient temperature failed (e.g. out of the range).
+    */
 }
 
-static void led_toggle(void)
+static bool led_toggle(void)
 {
-    gpio_set_level(LED_GPIO, !gpio_get_level(LED_GPIO));
+
+    return (ESP_OK == gpio_set_level(LED_GPIO, !gpio_get_level(LED_GPIO)));
+    // ESP_OK Success
+    // ESP_ERR_INVALID_ARG GPIO number error
 }

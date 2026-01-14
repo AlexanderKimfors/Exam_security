@@ -12,7 +12,6 @@ BTN_1_X = BTN_OFFSET
 BTN_2_X = BTN_1_X + BTN_LENGTH + BTN_OFFSET
 BTN_3_X = BTN_2_X + BTN_LENGTH + BTN_OFFSET
 
-
 class Window(QWidget):
     def __init__(self, comparam: str, sessionparam: str):
         super().__init__()
@@ -84,18 +83,21 @@ class Window(QWidget):
             self.__close_session()
 
 
-    def get_temperature(self) -> float:
-        (temperature, time) = self.__session.get_temperature()
-        if(-100.1 < temperature < -99.9):
-            self.__close_session()
-
-        self.log_message(f"Temperature: {temperature:.2f} °C at {time}"
-    )
+    def get_temperature(self):
+        (status, timestamp, temperature) = self.__session.get_temperature()
+        if(status):
+            self.log_message(f"Temperature: {temperature:.2f} °C at {timestamp}")
+        else:
+            self.log_message("Could not get the temperature")
+    
 
 
     def toggle_led(self):
-        time = self.__session.toggle_led()
-        self.log_message(f"LED toggled at {time}")
+        (status, time, state) = self.__session.toggle_led()
+        if not status:
+            self.log_message("Could not toggle the led")    
+        else:
+            self.log_message(f"LED toggled at {time}, the led state is {state}")
 
     def log_message(self, message: str):
         self.log.append(message)

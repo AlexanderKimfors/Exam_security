@@ -26,79 +26,87 @@ class Session:
         self.__SESSION_ID_SIZE = 8
         self.__TIME_STAMP_SIZE = 8
 
-
-
     def establish_session(self) -> tuple[bool, str]:
-        status = True # Ändra efter jag har gjort error handling under funktionen
+        status = True 
+        readable_time = ""
         # ======================================= First msg to send =======================================
         random.seed()
         AES_KEY = random.randbytes(self.__AES_KEY_SIZE)
         AES_IV = random.randbytes(self.__AES_IV_SIZE)
         RAND = random.randbytes(self.__RAND_SIZE)
+        try:
+            #                                                            AAD
+            aes = cipher.AES.new(self.__secret, cipher.MODE_GCM, AES_IV, self.__session_id)
+            cphr, tag = aes.encrypt(AES_KEY + RAND)
 
-        #                                                         AAD
-        aes = cipher.AES.new(self.__secret, cipher.MODE_GCM, AES_IV, self.__session_id)
+            message = AES_IV + cphr + tag
+            status = self.__com.send(message)
 
-        cphr, tag = aes.encrypt(AES_KEY + RAND)
+            # ===================================== First msg to receive =======================================
+            if status:
+                response = self.__com.receive(self.__AES_IV_SIZE + self.__SESSION_ID_SIZE + self.__TAG_SIZE)
 
-        message = AES_IV + cphr + tag
-        self.__com.send(message)
+                if response:
+                    offset = 0
+                    AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+                    offset += self.__AES_IV_SIZE
+                    cphr = response[offset: offset + self.__SESSION_ID_SIZE]
+                    offset +=  self.__SESSION_ID_SIZE
+                    tag = response[offset : offset + self.__TAG_SIZE]
 
-        # ===================================== First msg to receive =======================================
-        response = self.__com.receive(self.__AES_IV_SIZE + self.__SESSION_ID_SIZE + self.__TAG_SIZE)
-
-        offset = 0
-        AES_IV = response[offset : offset + self.__AES_IV_SIZE]
-        offset += self.__AES_IV_SIZE
-        cphr = response[offset: offset + self.__SESSION_ID_SIZE]
-        offset +=  self.__SESSION_ID_SIZE
-        tag = response[offset : offset + self.__TAG_SIZE]
-
-        #                                                      AAD
-        aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, RAND)
-        session_id = aes.decrypt(cphr, tag)
-
-        # ======================================= Second msg to send =======================================
-        timestamp_us = time.time_ns() // 1_000
-        timestamp_us_b = struct.pack(">Q", timestamp_us)
-
-        AES_IV = random.randbytes(self.__AES_IV_SIZE)
-
-        #                                                      AAD
-        aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, session_id)
-        cphr, tag = aes.encrypt(timestamp_us_b)
-
-        message = AES_IV + cphr + tag
-        self.__com.send(message)
+                    
+                    #                                                      AAD
+                    aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, RAND)
+                    session_id = aes.decrypt(cphr, tag)
 
 
-        # ===================================== Second msg to receive ======================================
-        response = self.__com.receive(self.__AES_IV_SIZE + self.__TIME_STAMP_SIZE + self.__TAG_SIZE)
+                    # ======================================= Second msg to send =======================================
+                    timestamp_us = time.time_ns() // 1_000
+                    timestamp_us_b = struct.pack(">Q", timestamp_us)
 
-        offset = 0 
-        AES_IV = response[offset : offset + self.__AES_IV_SIZE]
-        offset += self.__AES_IV_SIZE
-        cphr = response[offset : offset + self.__TIME_STAMP_SIZE]
-        offset += self.__TIME_STAMP_SIZE
-        tag = response[offset : offset + self.__TAG_SIZE]
+                    AES_IV = random.randbytes(self.__AES_IV_SIZE)
 
-        aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, session_id)
-        timestamp_us_b_received = aes.decrypt(cphr, tag)
+                    #                                                      AAD
+                    aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, session_id)
+                    cphr, tag = aes.encrypt(timestamp_us_b)
 
-        if(timestamp_us_b == timestamp_us_b_received):
-            self.__session_state = True
-            self.__session_id = session_id
-            self.__key = AES_KEY
-        else:
-            # ???
-            pass
+                    message = AES_IV + cphr + tag
+                    status = self.__com.send(message)
+
+                    # ===================================== Second msg to receive ======================================
+                    if status:
+                        response = self.__com.receive(self.__AES_IV_SIZE + self.__TIME_STAMP_SIZE + self.__TAG_SIZE)
+
+                        if response:
+                            offset = 0 
+                            AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+                            offset += self.__AES_IV_SIZE
+                            cphr = response[offset : offset + self.__TIME_STAMP_SIZE]
+                            offset += self.__TIME_STAMP_SIZE
+                            tag = response[offset : offset + self.__TAG_SIZE]
+
+                            aes = cipher.AES.new(AES_KEY, cipher.MODE_GCM, AES_IV, session_id)
+                            timestamp_us_b_received = aes.decrypt(cphr, tag)
+
+                            if(timestamp_us_b == timestamp_us_b_received):
+                                self.__session_state = True
+                                self.__session_id = session_id
+                                self.__key = AES_KEY
+                            else:
+                                status = False
+
+                            timestamp_us_received = struct.unpack(">Q", timestamp_us_b_received)[0]
+
+                            readable_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_us_received / 1_000_000))
+                else:
+                    status = False
+                    print(status)
+        except:
+            status = False
+
         
-        #DEBUG
-        print(self.__session_state)
 
-        readable_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_us / 1_000_000))
         return (status, readable_time)
-
 
     def close_session(self):
         self.__send_request(SessionRequest.CLOSE)
@@ -106,53 +114,109 @@ class Session:
         self.__session_state = False
 
 
-    def toggle_led(self) -> str:
-        timestamp_us = self.__send_request(SessionRequest.TOGGLE_LED)
-        timestamp_sec = timestamp_us / 1_000_000
-        timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
+    def toggle_led(self) -> tuple[bool, str, bool]:
+        """
+        Returns: (status, time, led_state)
+        """
+        status = self.__send_request(SessionRequest.TOGGLE_LED) # Ta bort timestamp och sätt in logiken här iställt från svaret
 
-        return timestamp_str
+        if status:
+            response = self.__com.receive(self.__AES_IV_SIZE + 1 + self.__TIME_STAMP_SIZE + 1 + self.__TAG_SIZE) # [IV, status 1 + time 8 + led_state 1, + TAG]
+
+            # Unpack response
+            if response:
+                offset = 0
+                AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+                offset += self.__AES_IV_SIZE
+                cphr = response[offset: offset + 1 + self.__TIME_STAMP_SIZE + 1]
+                offset += (1 + self.__TIME_STAMP_SIZE + 1)
+                tag = response[offset : offset + self.__TAG_SIZE]
+
+                # Decrypte cipher
+                aes = cipher.AES.new(
+                    self.__key,
+                    cipher.MODE_GCM,
+                    AES_IV,
+                    self.__session_id # AAD
+                )
+
+                plaintext = aes.decrypt(cphr, tag)
+
+                # Unpack plaintext
+                status = plaintext[0]
+                time_us_received = struct.unpack(">Q", plaintext[1:9])[0]
+                led_state = plaintext[9]
+
+                if status:
+                    timestamp_sec = time_us_received / 1_000_000
+                    timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
+        
+        return (status, timestamp_str, led_state)
         
 
-    def get_temperature(self) -> tuple[float, str]:
+    def get_temperature(self) -> tuple[bool, str, float]:
+        """
+        Returns (status, timestamp, temperature)
+        """
+        status = self.__send_request(SessionRequest.GET_TEMP)
+        if status:
 
-        timestamp_us = self.__send_request(SessionRequest.GET_TEMP)
-        timestamp_sec = timestamp_us / 1_000_000
-        timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
+            response = self.__com.receive(self.__AES_IV_SIZE + 1 + self.__TIME_STAMP_SIZE + 4 + self.__TAG_SIZE) # [IV, status + time + temp, TAG]
 
-        # =========== Ta emot ett paket via UART med IV + temp + TAG ==============
-        response = self.__com.receive(self.__AES_IV_SIZE + 4 + self.__TAG_SIZE)
+            # ============== Unpack the msg: IV, cipher, TAG ==================
+            offset = 0
+            AES_IV = response[offset : offset + self.__AES_IV_SIZE]
+            offset += self.__AES_IV_SIZE
+            cphr = response[offset: offset + 1 + self.__TIME_STAMP_SIZE + 4]
+            offset += (1 + self.__TIME_STAMP_SIZE + 4)
+            tag = response[offset : offset + self.__TAG_SIZE]
 
-        # ============== Packa upp meddelandet i IV, cipher, TAG ==================
-        offset = 0
-        AES_IV = response[offset : offset + self.__AES_IV_SIZE]
-        offset += self.__AES_IV_SIZE
-        cphr = response[offset: offset + 4]
-        offset += 4
-        tag = response[offset : offset + self.__TAG_SIZE]
+            aes = cipher.AES.new(
+                self.__key, 
+                cipher.MODE_GCM,
+                AES_IV, self.__session_id  # AAD
+            )
+            plaintext = aes.decrypt(cphr, tag)
 
-        # ====================== Dekryptera cipher till temp ======================
-        #                                                      AAD
-        aes = cipher.AES.new(self.__key, cipher.MODE_GCM, AES_IV, self.__session_id)
-        response = aes.decrypt(cphr, tag)
+            offset = 0
+            status = plaintext[offset]
+            offset += 1
+            time_us_received = struct.unpack(">Q", plaintext[offset: offset + self.__TIME_STAMP_SIZE])[0]
+            offset += self.__TIME_STAMP_SIZE
+            temp_b = plaintext[offset: offset + 4]
 
-        temp = struct.unpack("<f", response)[0]
+            temperature = struct.unpack(">f", temp_b)[0]
+            timestamp_sec = time_us_received / 1_000_000
+            timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
 
-        return (temp, timestamp_str)
+        return (status, timestamp_str, temperature)
     
 
-    def __send_request(self, req: SessionRequest) -> int:
+    
+    def __send_request(self, req: SessionRequest) -> bool:
+        status = True
+
         timestamp_us = time.time_ns() // 1_000
-        timestamp_us_b = struct.pack(">Q", timestamp_us)
+        timestamp_b = struct.pack(">Q", timestamp_us)
 
-        AES_IV = random.randbytes(self.__AES_IV_SIZE)
+        iv = random.randbytes(self.__AES_IV_SIZE)
 
-        #                                                         AAD
-        aes = cipher.AES.new(self.__key, cipher.MODE_GCM, AES_IV, self.__session_id)
-        req_b = struct.pack(">B", req)
-        msg = req_b + timestamp_us_b
-        cphr, tag = aes.encrypt(msg)
-        package = AES_IV + cphr + tag
-        self.__com.send(package)
+        try:
+            aes = cipher.AES.new(
+                self.__key,
+                cipher.MODE_GCM,
+                iv,
+                self.__session_id  # AAD
+            )
 
-        return timestamp_us
+            payload = struct.pack(">B", req) + timestamp_b
+            ciphertext, tag = aes.encrypt(payload)
+
+            packet = iv + ciphertext + tag
+
+            if not self.__com.send(packet):
+                status = False
+        except:
+            status = False
+        
+        return status

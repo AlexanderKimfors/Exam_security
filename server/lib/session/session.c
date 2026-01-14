@@ -51,20 +51,29 @@ static mbedtls_gcm_context gcm;
 static mbedtls_entropy_context entropy;
 static mbedtls_ctr_drbg_context ctr_drbg;
 
-static void random_init(void);
+static bool random_init(void);
 static void gcm_init(const uint8_t *key);
 static void set_rtc_from_timestamp(uint64_t timestamp_us);
 static bool handle_handshake_1(uint8_t *key, uint8_t *session_id);
 static bool handle_handshake_2(uint8_t *key, uint8_t *session_id);
 static void hex_to_bytes(const char *hex, uint8_t *out, size_t len);
+static inline void write_be64(uint8_t *buf, uint64_t v);
 
-void session_init()
+bool session_init()
 {
+    bool status = false;
     session.active = false;
     memset(session.key, 0, AES_KEY_SIZE);
     memset(session.id, 0, SESSION_ID_SIZE);
-    random_init();
-    communication_init(SPEED); // Returns a bool (error handling should be implemented)
+    if (random_init())
+    {
+        if (communication_init(SPEED))
+        {
+            status = true;
+        }
+    }
+
+    return status;
 }
 
 bool session_is_active(void)
@@ -116,12 +125,16 @@ session_request_t session_get_request(void)
 
         // memcpy(&req, plain_request, REQUEST_SIZE);
         req = (session_request_t)plain_request[0];
+
         // memcpy(&time_stamp, plain_request + REQUEST_SIZE, TIME_STAMP_SIZE);
+
+        /* Convert timestamp (big-endian) to uint64 */
         for (int i = 0; i < TIME_STAMP_SIZE; i++)
         {
-            time_stamp = (time_stamp << 8) |
+            time_stamp = (time_stamp << BYTE_SIZE) |
                          plain_request[REQUEST_SIZE + i];
         }
+
         /* ================================================================================ */
 
         /* ============================== Validate request ================================ */
@@ -161,15 +174,25 @@ bool session_establish(void)
     return status;
 }
 
-bool session_send_temperature(float temp)
+bool session_send_temperature(bool temp_status, float temp)
 {
     bool status = false;
     int ret;
     size_t offset = 0;
-    float_bytes_t fb;
-    fb.f = temp;
+    float_bytes_t fb; // Ta bort?
+    fb.f = temp;      // tror jag kan ta bort?
 
-    uint8_t cipher[sizeof(float)];
+    uint8_t cipher[sizeof(bool) + TIME_STAMP_SIZE + sizeof(float)];
+    uint8_t plaintext[sizeof(bool) + TIME_STAMP_SIZE + sizeof(float)];
+
+    uint8_t timestamp_b[TIME_STAMP_SIZE];
+    write_be64(timestamp_b, session.latest_msg);
+
+    plaintext[offset] = temp_status;
+    offset += sizeof(temp_status);
+    memcpy(plaintext + offset, timestamp_b, TIME_STAMP_SIZE);
+    offset += TIME_STAMP_SIZE;
+    memcpy(plaintext + offset, &temp, sizeof(float));
 
     // Generera nytt IV
     if (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0)
@@ -181,12 +204,12 @@ bool session_send_temperature(float temp)
         ret = mbedtls_gcm_crypt_and_tag(
             &gcm,
             MBEDTLS_GCM_ENCRYPT,
-            sizeof(temp), // Size of the msg
+            sizeof(plaintext), // Size of the msg
             iv,
             IV_SIZE,
             session.id, // AAD
             SESSION_ID_SIZE,
-            fb.b, // Plaintext msg to be encrypted
+            plaintext, // Plaintext msg to be encrypted
             cipher,
             TAG_SIZE,
             tag);
@@ -197,11 +220,66 @@ bool session_send_temperature(float temp)
             offset = 0;
             memcpy(tx_buf, iv, IV_SIZE);
             offset = IV_SIZE;
-            memcpy(tx_buf + offset, cipher, sizeof(temp));
-            offset += sizeof(temp);
+            memcpy(tx_buf + offset, cipher, sizeof(cipher));
+            offset += sizeof(cipher);
             memcpy(tx_buf + offset, tag, TAG_SIZE);
 
-            if (communication_write(tx_buf, IV_SIZE + sizeof(temp) + TAG_SIZE))
+            if (communication_write(tx_buf, IV_SIZE + sizeof(cipher) + TAG_SIZE))
+            {
+                status = true;
+            }
+        }
+    }
+
+    return status;
+}
+
+bool session_send_toggle_led(bool status, int state)
+{
+    int ret;
+    size_t offset = 0;
+
+    uint8_t cipher[sizeof(bool) + TIME_STAMP_SIZE + sizeof(bool)];
+    uint8_t plaintext[sizeof(bool) + TIME_STAMP_SIZE + sizeof(bool)];
+
+    uint8_t timestamp_b[TIME_STAMP_SIZE];
+    write_be64(timestamp_b, session.latest_msg);
+
+    plaintext[0] = status;
+    memcpy(plaintext + sizeof(bool), timestamp_b, TIME_STAMP_SIZE);
+    plaintext[sizeof(bool) + TIME_STAMP_SIZE] = state;
+
+    // Generera nytt IV
+    if (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0)
+    {
+        // Initiera GCM
+        gcm_init(session.key);
+
+        // Dekryptera meddelandet
+        ret = mbedtls_gcm_crypt_and_tag(
+            &gcm,
+            MBEDTLS_GCM_ENCRYPT,
+            sizeof(cipher), // Size of the msg
+            iv,
+            IV_SIZE,
+            session.id, // AAD
+            SESSION_ID_SIZE,
+            plaintext, // msg to be encrypted
+            cipher,
+            TAG_SIZE,
+            tag);
+
+        // Packa IV + meddelandet + TAG i ett paket och skicka via uart med timeout
+        if (ret == 0)
+        {
+            offset = 0;
+            memcpy(tx_buf, iv, IV_SIZE);
+            offset = IV_SIZE;
+            memcpy(tx_buf + offset, cipher, sizeof(cipher));
+            offset += sizeof(cipher);
+            memcpy(tx_buf + offset, tag, TAG_SIZE);
+
+            if (communication_write(tx_buf, IV_SIZE + sizeof(cipher) + TAG_SIZE))
             {
                 status = true;
             }
@@ -400,7 +478,7 @@ static void set_rtc_from_timestamp(uint64_t timestamp_us)
     settimeofday(&tv, NULL);
 }
 
-static void random_init(void)
+static bool random_init(void)
 {
     uint8_t buffer[AES_KEY_SIZE];
 
@@ -412,11 +490,11 @@ static void random_init(void)
         buffer[i] = esp_random() & 0xFF;
     bootloader_random_disable();
 
-    mbedtls_ctr_drbg_seed(&ctr_drbg,
-                          mbedtls_entropy_func,
-                          &entropy,
-                          buffer,
-                          AES_KEY_SIZE);
+    return !mbedtls_ctr_drbg_seed(&ctr_drbg,
+                                  mbedtls_entropy_func,
+                                  &entropy,
+                                  buffer,
+                                  AES_KEY_SIZE);
 }
 
 static void gcm_init(const uint8_t *key)
@@ -432,4 +510,16 @@ static void hex_to_bytes(const char *hex, uint8_t *out, size_t len)
     {
         sscanf(hex + 2 * i, "%2hhx", &out[i]);
     }
+}
+
+static inline void write_be64(uint8_t *buf, uint64_t v)
+{
+    buf[0] = (v >> 56) & 0xFF;
+    buf[1] = (v >> 48) & 0xFF;
+    buf[2] = (v >> 40) & 0xFF;
+    buf[3] = (v >> 32) & 0xFF;
+    buf[4] = (v >> 24) & 0xFF;
+    buf[5] = (v >> 16) & 0xFF;
+    buf[6] = (v >> 8) & 0xFF;
+    buf[7] = v & 0xFF;
 }

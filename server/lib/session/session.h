@@ -12,7 +12,13 @@ typedef enum
     TOGGLE_LED,
 } session_request_t;
 
-void session_init(void);
+/**
+ * @brief Initialize session
+ *
+ * @return true If successfully initialized the session
+ * @return false If failed to initialize the session
+ */
+bool session_init(void);
 
 /* Returns true when session is active */
 bool session_is_active(void);
@@ -24,9 +30,10 @@ bool session_establish(void);
 session_request_t session_get_request(void);
 
 /* Encrypted responses */
-bool session_send_temperature(float temp);
-void session_close(void);
+bool session_send_temperature(bool status, float temp);
 
-void session_send_timout(void);
+bool session_send_toggle_led(bool status, int state);
+
+void session_close(void);
 
 #endif
