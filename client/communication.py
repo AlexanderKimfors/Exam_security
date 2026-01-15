@@ -1,4 +1,5 @@
 import serial
+import time
 
 class Communication:
     def __init__(self, param: str):
@@ -26,7 +27,7 @@ class Communication:
             pass
 
         return status
-
+    
     def receive(self, size: int) -> bytes:
         data = bytes()
         try:
@@ -35,6 +36,20 @@ class Communication:
                 data = self.__serial.read(size)
             if len(data) != size:
                 data = bytes()
+        except:
+            pass
+
+        return data
+
+    def receive_2(self, size: int) -> bytes:
+        data = bytes()
+        try:
+            if self.__serial.is_open:
+                self.__serial.reset_input_buffer()
+                while self.__serial.in_waiting == 0:
+                    pass
+                time.sleep(0.2)
+                data = self.__serial.read(min(size, self.__serial.in_waiting))
         except:
             pass
 

@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QPushButton, QTextEdit
 from PyQt6.QtGui import QCloseEvent
-from session import Session
+from session import Session, SessionStatus
 
 BTN_OFFSET = 7
 
@@ -72,42 +72,69 @@ class Window(QWidget):
 
     def handle_session(self):
         if not self.session_active:
-            (status, time) = self.__session.establish_session()
+            (status, timestamp) = self.__session.establish_session()
             if(status):
                 self.__open_session()
-                self.log_message(f"Session established at {time}")
+                self.log_message(f"[{timestamp}]    Session established")
             else:
-                self.log_message("Session establishment failed")
+                self.log_message(f"[{timestamp}]    Session establishment failed")
         else:
-            self.__session.close_session()
             self.__close_session()
 
 
     def get_temperature(self):
         (status, timestamp, temperature) = self.__session.get_temperature()
-        if(status):
-            self.log_message(f"Temperature: {temperature:.2f} °C at {timestamp}")
-        else:
-            self.log_message("Could not get the temperature")
+
+        match status:
+            case SessionStatus.OK:
+                self.log_message(f"[{timestamp}]    Temperature: {temperature:.2f} °C")
+            case SessionStatus.EXPIRED:
+                self.log_message(f"[{timestamp}]    The session has expired.")
+                self.session_active = False
+                self.btn_session.setText("Establish session")
+                self.btn_temp.setEnabled(False)
+                self.btn_led.setEnabled(False)
+    
+            case SessionStatus.ERROR:
+                self.log_message(f"[{timestamp}]    Could not read the temperature.")
     
 
 
     def toggle_led(self):
-        (status, time, state) = self.__session.toggle_led()
-        if not status:
-            self.log_message("Could not toggle the led")    
-        else:
-            self.log_message(f"LED toggled at {time}, the led state is {state}")
+        (status, timestamp, led_state) = self.__session.toggle_led()
+
+        match status:
+            case SessionStatus.OK:
+                self.log_message(f"[{timestamp}]    Led state is {led_state}")
+            case SessionStatus.EXPIRED:
+                self.log_message(f"[{timestamp}]    The session has expired.")
+                self.session_active = False
+                self.btn_session.setText("Establish session")
+                self.btn_temp.setEnabled(False)
+                self.btn_led.setEnabled(False)
+    
+            case SessionStatus.ERROR:
+                self.log_message(f"[{timestamp}]    Could not toggle the LED.")
 
     def log_message(self, message: str):
         self.log.append(message)
 
-    def closeEvent(self, event: QCloseEvent):
+    def closeEvent(self, event: QCloseEvent): # Think this should be gone, we dont want to close the session if escaping the window?
         if self.session_active:
             self.__session.close_session()
         event.accept()
 
     def __close_session(self):
+        (status, timestamp) = self.__session.close_session()
+
+        match status:
+            case SessionStatus.OK:
+                self.log_message(f"[{timestamp}]    Closed the session")
+            case SessionStatus.EXPIRED:
+                self.log_message(f"[{timestamp}]    The session has expired, closed sesssion")
+            case SessionStatus.ERROR:
+                self.log_message(f"[{timestamp}]    Something went wrong trying to close the session")
+
         self.session_active = False
         self.btn_session.setText("Establish session")
         self.btn_temp.setEnabled(False)

@@ -34,6 +34,6 @@ bool session_send_temperature(bool status, float temp);
 
 bool session_send_toggle_led(bool status, int state);
 
-void session_close(void);
+bool session_close(void);
 
 #endif

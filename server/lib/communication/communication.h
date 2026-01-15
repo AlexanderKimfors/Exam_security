@@ -24,7 +24,7 @@ bool communication_init(const char *params);
  * @return true If exactly @p length bytes were successfully read.
  * @return false If fewer then @p length bytes were read.
  */
-bool communication_read_timeout(uint8_t *buf, size_t length, size_t wait_ms);
+int communication_read_timeout(uint8_t *buf, size_t length, size_t wait_ms);
 
 /**
  * @brief Reads data from the UART port until the specified number of bytes
@@ -35,7 +35,7 @@ bool communication_read_timeout(uint8_t *buf, size_t length, size_t wait_ms);
  * @return true If exactly @p length bytes were successfully read.
  * @return false If fewer then @p length bytes were read.
  */
-bool communication_read(uint8_t *buf, size_t length);
+int communication_read(uint8_t *buf, size_t length);
 
 bool communication_write(uint8_t *data, size_t length);
 

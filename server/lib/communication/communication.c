@@ -35,16 +35,22 @@ bool communication_init(const char *params)
     return status;
 }
 
-bool communication_read_timeout(uint8_t *buf, size_t length, size_t wait_ms)
+int communication_read_timeout(uint8_t *buf, size_t length, size_t wait_ms)
 {
-    uart_flush(UART_PORT);
-    return (length == uart_read_bytes(UART_PORT, buf, length, pdMS_TO_TICKS(wait_ms)));
+    // uart_flush(UART_PORT);
+    return (uart_read_bytes(UART_PORT, buf, length, pdMS_TO_TICKS(wait_ms)));
 }
 
-bool communication_read(uint8_t *buf, size_t length)
+int communication_read(uint8_t *buf, size_t length)
 {
+    size_t available = 0;
     uart_flush(UART_PORT);
-    return (length == uart_read_bytes(UART_PORT, buf, length, UART_WAIT_FOREVER));
+    while (available == 0)
+    {
+        vTaskDelay(pdTICKS_TO_MS(10));
+        (void)uart_get_buffered_data_len(UART_PORT, &available);
+    }
+    return uart_read_bytes(UART_PORT, buf, length, pdTICKS_TO_MS(100));
 }
 
 bool communication_write(uint8_t *buf, size_t length)
