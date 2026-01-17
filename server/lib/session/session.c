@@ -70,7 +70,10 @@ static void hex_to_bytes(const char *hex, uint8_t *out, size_t len);
 static bool encrypt_and_send(uint8_t *plaintext, uint8_t *cipher, size_t len, uint8_t *AAD, size_t AAD_len, uint8_t *key);
 static inline void write_be64(uint8_t *buf, uint64_t v);
 static bool encrypt(uint8_t *plaintext, uint8_t *cipher, size_t msg_len, uint8_t *AAD, size_t AAD_len, uint8_t *key);
+static bool decrypt(uint8_t *cipher, uint8_t *plaintext, uint8_t cipher_len, uint8_t *AAD, size_t AAD_len, uint8_t *key);
 static bool send(uint8_t *cipher, size_t len);
+static bool read(uint8_t *cipher, size_t len);
+static bool read_timeout(uint8_t *cipher, size_t len_cipher, size_t wait_ml);
 
 bool session_init()
 {
@@ -105,40 +108,11 @@ bool session_close(void)
     write_be64(timestamp_b, session.latest_msg);
     memcpy(plaintext + offset, timestamp_b, TIME_STAMP_SIZE);
 
-    // Generera nytt IV
-    if (mbedtls_ctr_drbg_random(&ctr_drbg, iv, IV_SIZE) == 0)
+    if (encrypt(plaintext, cipher, 1 + TIME_STAMP_SIZE, session.id, SESSION_ID_SIZE, session.key))
     {
-        // Initiera GCM
-        gcm_init(session.key);
-
-        // Dekryptera meddelandet
-        ret = mbedtls_gcm_crypt_and_tag(
-            &gcm,
-            MBEDTLS_GCM_ENCRYPT,
-            sizeof(plaintext), // Size of the msg
-            iv,
-            IV_SIZE,
-            session.id, // AAD
-            SESSION_ID_SIZE,
-            plaintext, // Plaintext msg to be encrypted
-            cipher,
-            TAG_SIZE,
-            tag);
-
-        // Packa IV + meddelandet + TAG i ett paket och skicka via uart med timeout
-        if (ret == 0)
+        if (send(cipher, 1 + TIME_STAMP_SIZE))
         {
-            offset = 0;
-            memcpy(tx_buf, iv, IV_SIZE);
-            offset = IV_SIZE;
-            memcpy(tx_buf + offset, cipher, sizeof(cipher));
-            offset += sizeof(cipher);
-            memcpy(tx_buf + offset, tag, TAG_SIZE);
-
-            if (communication_write(tx_buf, IV_SIZE + sizeof(cipher) + TAG_SIZE))
-            {
-                status = true;
-            }
+            status = true;
         }
     }
 
@@ -164,55 +138,21 @@ session_request_t session_get_request(void)
     uint8_t plain_request[REQUEST_SIZE + TIME_STAMP_SIZE] = {0};
     uint8_t cipher_request[REQUEST_SIZE + TIME_STAMP_SIZE] = {0};
 
-    int len = communication_read(rx_buf, IV_SIZE + REQUEST_SIZE + TIME_STAMP_SIZE + TAG_SIZE);
-
-    if (len == IV_SIZE + REQUEST_SIZE + TIME_STAMP_SIZE + TAG_SIZE)
+    if (read(cipher_request, REQUEST_SIZE + TIME_STAMP_SIZE))
     {
-        size_t offset = 0;
-        memcpy(iv, rx_buf + offset, IV_SIZE);
-        offset += IV_SIZE;
-
-        memcpy(cipher_request, rx_buf + offset, REQUEST_SIZE + TIME_STAMP_SIZE);
-        offset += REQUEST_SIZE + TIME_STAMP_SIZE;
-
-        memcpy(tag, rx_buf + offset, TAG_SIZE);
-
-        gcm_init(session.key);
-
-        int ret = mbedtls_gcm_auth_decrypt(
-            &gcm,
-            REQUEST_SIZE + TIME_STAMP_SIZE,
-            iv,
-            IV_SIZE,
-            session.id,
-            SESSION_ID_SIZE,
-            tag,
-            TAG_SIZE,
-            cipher_request,
-            plain_request);
-        if (ret != 0)
+        if (decrypt(cipher_request, plain_request, REQUEST_SIZE + TIME_STAMP_SIZE, session.id, SESSION_ID_SIZE, session.key))
         {
-            req = INVALID;
-        }
-        else
-        {
-            /* ================================================================================ */
-
             /* =================== Extract the request and time from msg ====================== */
             uint64_t time_stamp = 0;
 
             // memcpy(&req, plain_request, REQUEST_SIZE);
             req = (session_request_t)plain_request[0];
-
-            // memcpy(&time_stamp, plain_request + REQUEST_SIZE, TIME_STAMP_SIZE);
-
             /* Convert timestamp (big-endian) to uint64 */
             for (int i = 0; i < TIME_STAMP_SIZE; i++)
             {
                 time_stamp = (time_stamp << BYTE_SIZE) |
                              plain_request[REQUEST_SIZE + i];
             }
-
             /* ================================================================================ */
 
             /* ============================== Validate request ================================ */
@@ -238,6 +178,10 @@ session_request_t session_get_request(void)
                 session.latest_msg = time_stamp;
             }
             /* ================================================================================ */
+        }
+        else
+        {
+            req = INVALID;
         }
     }
     else
@@ -326,39 +270,14 @@ static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
     uint8_t rand[RAND_SIZE];
     int ret = 0;
 
-    int len = communication_read(rx_buf, IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE);
-
-    if (len == IV_SIZE + AES_KEY_SIZE + RAND_SIZE + TAG_SIZE)
+    if (read(ciphertext, AES_KEY_SIZE + RAND_SIZE))
     {
-        /* Extract the individual components from the received message */
-        size_t offset = 0;
-        memcpy(iv, rx_buf + offset, IV_SIZE);
-        offset += IV_SIZE;
-        memcpy(ciphertext, rx_buf + offset, AES_KEY_SIZE + RAND_SIZE);
-        offset += AES_KEY_SIZE + RAND_SIZE;
-        memcpy(tag, rx_buf + offset, TAG_SIZE);
-
         hex_to_bytes(HSECRET, key, AES_KEY_SIZE);
 
-        gcm_init(key);
-
-        ret = mbedtls_gcm_auth_decrypt(
-            &gcm,
-            AES_KEY_SIZE + RAND_SIZE, // Size of the msg
-            iv,
-            IV_SIZE,
-            session_id, // AAD
-            SESSION_ID_SIZE,
-            tag,
-            TAG_SIZE,
-            ciphertext,
-            plaintext);
-
-        if (ret == 0)
+        if (decrypt(ciphertext, plaintext, AES_KEY_SIZE + RAND_SIZE, session.id, SESSION_ID_SIZE, key))
         {
             /* Extract the AES_KEY */
             memcpy(key, plaintext, AES_KEY_SIZE);
-
             /* Extract the RAND */
             memcpy(rand, plaintext + AES_KEY_SIZE, RAND_SIZE);
 
@@ -380,35 +299,9 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
     uint8_t plaintext[TIME_STAMP_SIZE];
     uint8_t ciphertext[TIME_STAMP_SIZE];
 
-    int len = communication_read_timeout(rx_buf, IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE, UART_WAIT_TICKS);
-    if (len == (IV_SIZE + TIME_STAMP_SIZE + TAG_SIZE))
+    if (read_timeout(ciphertext, TIME_STAMP_SIZE, UART_WAIT_TICKS))
     {
-        gpio_set_level(GPIO_NUM_4, 1); // debug
-
-        /* Extract the individual components from the received message */
-        int offset = 0;
-        memcpy(iv, rx_buf, IV_SIZE);
-        offset += IV_SIZE;
-        memcpy(ciphertext, rx_buf + offset, TIME_STAMP_SIZE);
-        offset += TIME_STAMP_SIZE;
-        memcpy(tag, rx_buf + offset, TAG_SIZE);
-
-        /* Mbed TLS requires the GCM context to be reinitialized every time */
-        gcm_init(key);
-
-        int ret = mbedtls_gcm_auth_decrypt(
-            &gcm,
-            TIME_STAMP_SIZE, // Size of the msg
-            iv,
-            IV_SIZE,
-            session_id, // AAD
-            SESSION_ID_SIZE,
-            tag,
-            TAG_SIZE,
-            ciphertext,
-            plaintext);
-
-        if (ret == 0)
+        if (decrypt(ciphertext, plaintext, TIME_STAMP_SIZE, session.id, SESSION_ID_SIZE, key))
         {
             /* Convert timestamp (big-endian) to uint64 */
             uint64_t timestamp_us = 0;
@@ -523,6 +416,25 @@ static bool encrypt(uint8_t *plaintext, uint8_t *cipher, size_t msg_len, uint8_t
     return status;
 }
 
+static bool decrypt(uint8_t *cipher, uint8_t *plaintext, uint8_t cipher_len, uint8_t *AAD, size_t AAD_len, uint8_t *key)
+{
+    gcm_init(key);
+
+    int ret = mbedtls_gcm_auth_decrypt(
+        &gcm,
+        cipher_len,
+        iv,
+        IV_SIZE,
+        AAD,
+        AAD_len,
+        tag,
+        TAG_SIZE,
+        cipher,
+        plaintext);
+
+    return ret == 0;
+}
+
 static bool send(uint8_t *cipher, size_t len)
 {
     size_t offset = 0;
@@ -533,4 +445,46 @@ static bool send(uint8_t *cipher, size_t len)
     memcpy(tx_buf + offset, tag, TAG_SIZE);
 
     return (communication_write(tx_buf, IV_SIZE + len + TAG_SIZE));
+}
+
+static bool read(uint8_t *cipher, size_t len_cipher)
+{
+    bool status = false;
+
+    int len = communication_read(rx_buf, IV_SIZE + len_cipher + TAG_SIZE);
+
+    if (len == IV_SIZE + len_cipher + TAG_SIZE)
+    {
+        size_t offset = 0;
+        memcpy(iv, rx_buf + offset, IV_SIZE);
+        offset += IV_SIZE;
+        memcpy(cipher, rx_buf + offset, len_cipher);
+        offset += len_cipher;
+        memcpy(tag, rx_buf + offset, TAG_SIZE);
+
+        status = true;
+    }
+
+    return status;
+}
+
+static bool read_timeout(uint8_t *cipher, size_t len_cipher, size_t wait_ml)
+{
+    bool status = false;
+
+    int len = communication_read_timeout(rx_buf, IV_SIZE + len_cipher + TAG_SIZE, wait_ml);
+
+    if (len == IV_SIZE + len_cipher + TAG_SIZE)
+    {
+        size_t offset = 0;
+        memcpy(iv, rx_buf + offset, IV_SIZE);
+        offset += IV_SIZE;
+        memcpy(cipher, rx_buf + offset, len_cipher);
+        offset += len_cipher;
+        memcpy(tag, rx_buf + offset, TAG_SIZE);
+
+        status = true;
+    }
+
+    return status;
 }

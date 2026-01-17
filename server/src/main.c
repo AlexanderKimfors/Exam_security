@@ -13,6 +13,7 @@
 
 #define RGB_LED_COLOR_RED 255, 0, 0
 #define RGB_LED_COLOR_GREEN 0, 255, 0
+#define RGB_LED_COLOR_BLUE 0, 0, 255
 
 static temperature_sensor_handle_t temp_handle = NULL;
 
