@@ -32,7 +32,6 @@
 typedef struct
 {
     bool active;
-    uint8_t key[AES_KEY_SIZE];
     uint8_t id[SESSION_ID_SIZE];
     uint64_t latest_msg; // timestamp from the latest msg
 } session_ctx_t;
@@ -52,12 +51,10 @@ typedef union
 
 static session_ctx_t session;
 static session_status_t session_status;
+static psa_key_handle_t gcm_key = 0;
 static uint8_t iv[IV_SIZE];
-static uint8_t tag[TAG_SIZE];
 static uint8_t tx_buf[IV_SIZE + MAX_PAYLOAD_SIZE_TX + TAG_SIZE];
 static uint8_t rx_buf[IV_SIZE + MAX_PAYLOAD_SIZE_RX + TAG_SIZE];
-
-static psa_key_handle_t gcm_key = 0;
 
 static bool gcm_init_psa(const uint8_t *key);
 static void set_rtc_from_timestamp(uint64_t timestamp_us);
@@ -75,7 +72,6 @@ bool session_init()
 {
     bool status = false;
     session.active = false;
-    memset(session.key, 0, AES_KEY_SIZE);
     memset(session.id, 0, SESSION_ID_SIZE);
 
     if (communication_init(SPEED))
@@ -105,20 +101,18 @@ bool session_close(void)
     write_be64(timestamp_b, session.latest_msg);
     memcpy(plaintext + offset, timestamp_b, TIME_STAMP_SIZE);
 
-    if (encrypt(plaintext, cipher, 1 + TIME_STAMP_SIZE, session.id, SESSION_ID_SIZE))
+    if (encrypt(plaintext, cipher, sizeof(plaintext), session.id, SESSION_ID_SIZE))
     {
-        if (send(cipher, 1 + TIME_STAMP_SIZE))
+        if (send(cipher, sizeof(cipher)))
         {
             status = true;
         }
     }
 
     session.active = false;
-    memset(session.key, 0, AES_KEY_SIZE);
     memset(session.id, 0, SESSION_ID_SIZE);
     memset(&session.latest_msg, 0, TIME_STAMP_SIZE);
     memset(iv, 0, IV_SIZE);
-    memset(tag, 0, TAG_SIZE);
 
     psa_destroy_key(gcm_key);
     gcm_key = 0;
@@ -135,23 +129,23 @@ session_request_t session_get_request(void)
 {
     session_request_t req = INVALID;
     /* ===================== Extract the msg and decrypt it  ========================= */
-    uint8_t plain_request[REQUEST_SIZE + TIME_STAMP_SIZE] = {0};
-    uint8_t cipher_request[REQUEST_SIZE + TIME_STAMP_SIZE + TAG_SIZE] = {0};
+    uint8_t plaintext[REQUEST_SIZE + TIME_STAMP_SIZE] = {0};
+    uint8_t cipher[REQUEST_SIZE + TIME_STAMP_SIZE + TAG_SIZE] = {0};
 
-    if (read(cipher_request, REQUEST_SIZE + TIME_STAMP_SIZE))
+    if (read(cipher, sizeof(cipher)))
     {
-        if (decrypt(cipher_request, plain_request, REQUEST_SIZE + TIME_STAMP_SIZE, session.id, SESSION_ID_SIZE))
+        if (decrypt(cipher, plaintext, sizeof(cipher), session.id, SESSION_ID_SIZE))
         {
             /* =================== Extract the request and time from msg ====================== */
             uint64_t time_stamp = 0;
 
-            // memcpy(&req, plain_request, REQUEST_SIZE);
-            req = (session_request_t)plain_request[0];
+            // memcpy(&req, plaintext, REQUEST_SIZE);
+            req = (session_request_t)plaintext[0];
             /* Convert timestamp (big-endian) to uint64 */
             for (int i = 0; i < TIME_STAMP_SIZE; i++)
             {
                 time_stamp = (time_stamp << BYTE_SIZE) |
-                             plain_request[REQUEST_SIZE + i];
+                             plaintext[REQUEST_SIZE + i];
             }
             /* ================================================================================ */
 
@@ -220,27 +214,26 @@ static bool handle_handshake_1(uint8_t *key, uint8_t *session_id)
 {
     bool status = false;
     uint8_t plaintext[AES_KEY_SIZE + SESSION_ID_SIZE];
-    uint8_t ciphertext[AES_KEY_SIZE + SESSION_ID_SIZE + TAG_SIZE];
+    uint8_t cipher_received[AES_KEY_SIZE + SESSION_ID_SIZE + TAG_SIZE];
+    uint8_t cipher_send[SESSION_ID_SIZE + TAG_SIZE];
     uint8_t rand[RAND_SIZE];
-    int ret = 0;
 
-    if (read(ciphertext, AES_KEY_SIZE + RAND_SIZE))
+    if (read(cipher_received, sizeof(cipher_received)))
     {
-        if (decrypt(ciphertext, plaintext, AES_KEY_SIZE + RAND_SIZE, session.id, SESSION_ID_SIZE))
+        if (decrypt(cipher_received, plaintext, sizeof(cipher_received), session_id, SESSION_ID_SIZE))
         {
-            /* Extract the AES_KEY */
             memcpy(key, plaintext, AES_KEY_SIZE);
-            /* Extract the RAND */
             memcpy(rand, plaintext + AES_KEY_SIZE, RAND_SIZE);
 
             if (gcm_init_psa(key))
             {
-                if (encrypt(session_id, ciphertext, SESSION_ID_SIZE, rand, RAND_SIZE))
+                if (psa_generate_random(session_id, SESSION_ID_SIZE) == PSA_SUCCESS)
                 {
-                    status = send(ciphertext, SESSION_ID_SIZE);
+                    if (encrypt(session_id, cipher_send, SESSION_ID_SIZE, rand, RAND_SIZE))
+                    {
+                        status = send(cipher_send, sizeof(cipher_send));
+                    }
                 }
-
-                return status;
             }
         }
     }
@@ -252,11 +245,11 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
 {
     bool status = false;
     uint8_t plaintext[TIME_STAMP_SIZE];
-    uint8_t ciphertext[TIME_STAMP_SIZE + TAG_SIZE];
+    uint8_t cipher[TIME_STAMP_SIZE + TAG_SIZE];
 
-    if (read_timeout(ciphertext, TIME_STAMP_SIZE, UART_WAIT_TICKS))
+    if (read_timeout(cipher, sizeof(cipher), UART_WAIT_TICKS))
     {
-        if (decrypt(ciphertext, plaintext, TIME_STAMP_SIZE, session.id, SESSION_ID_SIZE))
+        if (decrypt(cipher, plaintext, sizeof(cipher), session_id, SESSION_ID_SIZE))
         {
             /* Convert timestamp (big-endian) to uint64 */
             uint64_t timestamp_us = 0;
@@ -267,15 +260,14 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
 
             set_rtc_from_timestamp(timestamp_us);
 
-            if (encrypt(plaintext, ciphertext, TIME_STAMP_SIZE, session_id, SESSION_ID_SIZE))
+            if (encrypt(plaintext, cipher, sizeof(plaintext), session_id, SESSION_ID_SIZE))
             {
-                if (send(ciphertext, TIME_STAMP_SIZE))
+                if (send(cipher, sizeof(cipher)))
                 {
                     /* Establish session */
                     session.active = true;
                     session.latest_msg = timestamp_us;
                     memcpy(session.id, session_id, SESSION_ID_SIZE);
-                    memcpy(session.key, key, AES_KEY_SIZE);
                     status = true;
                 }
             }
@@ -368,40 +360,37 @@ static inline void write_be64(uint8_t *buf, uint64_t v)
 
 static bool encrypt(uint8_t *plaintext, uint8_t *cipher, size_t msg_len, uint8_t *AAD, size_t AAD_len)
 {
+    bool status = false;
     size_t out_len;
 
-    if (psa_generate_random(iv, IV_SIZE) != PSA_SUCCESS)
-        return false;
-
-    psa_status_t status = psa_aead_encrypt(
-        gcm_key,
-        PSA_ALG_GCM,
-        iv,
-        IV_SIZE,
-        AAD,
-        AAD_len,
-        plaintext,
-        msg_len,
-        cipher,
-        msg_len + TAG_SIZE,
-        &out_len);
-
-    if (status == PSA_SUCCESS)
+    if (psa_generate_random(iv, IV_SIZE) == PSA_SUCCESS)
     {
-        memcpy(tag, cipher + msg_len, TAG_SIZE);
-        return true;
+        psa_status_t psa_status = psa_aead_encrypt(
+            gcm_key,
+            PSA_ALG_GCM,
+            iv,
+            IV_SIZE,
+            AAD,
+            AAD_len,
+            plaintext,
+            msg_len,
+            cipher,
+            msg_len + TAG_SIZE,
+            &out_len);
+
+        if (psa_status == PSA_SUCCESS)
+        {
+            status = true;
+        }
     }
 
-    return false;
+    return status;
 }
 
 static bool decrypt(uint8_t *cipher, uint8_t *plaintext, size_t cipher_len, uint8_t *AAD, size_t AAD_len)
 {
-    uint8_t cipher_and_tag[cipher_len + TAG_SIZE];
     size_t out_len;
-
-    memcpy(cipher_and_tag, cipher, cipher_len);
-    memcpy(cipher_and_tag + cipher_len, tag, TAG_SIZE);
+    size_t plaintext_len = cipher_len - TAG_SIZE;
 
     psa_status_t status = psa_aead_decrypt(
         gcm_key,
@@ -410,10 +399,10 @@ static bool decrypt(uint8_t *cipher, uint8_t *plaintext, size_t cipher_len, uint
         IV_SIZE,
         AAD,
         AAD_len,
-        cipher_and_tag,
-        cipher_len + TAG_SIZE,
-        plaintext,
+        cipher,
         cipher_len,
+        plaintext,
+        plaintext_len,
         &out_len);
 
     return status == PSA_SUCCESS;
@@ -421,30 +410,22 @@ static bool decrypt(uint8_t *cipher, uint8_t *plaintext, size_t cipher_len, uint
 
 static bool send(uint8_t *cipher, size_t len)
 {
-    size_t offset = 0;
     memcpy(tx_buf, iv, IV_SIZE);
-    offset = IV_SIZE;
-    memcpy(tx_buf + offset, cipher, len);
-    offset += len;
-    memcpy(tx_buf + offset, tag, TAG_SIZE);
+    memcpy(tx_buf + IV_SIZE, cipher, len);
 
-    return (communication_write(tx_buf, IV_SIZE + len + TAG_SIZE));
+    return (communication_write(tx_buf, IV_SIZE + len));
 }
 
 static bool read(uint8_t *cipher, size_t len_cipher)
 {
     bool status = false;
 
-    int len = communication_read(rx_buf, IV_SIZE + len_cipher + TAG_SIZE);
+    int len = communication_read(rx_buf, IV_SIZE + len_cipher);
 
-    if (len == IV_SIZE + len_cipher + TAG_SIZE)
+    if (len == (IV_SIZE + len_cipher))
     {
-        size_t offset = 0;
-        memcpy(iv, rx_buf + offset, IV_SIZE);
-        offset += IV_SIZE;
-        memcpy(cipher, rx_buf + offset, len_cipher);
-        offset += len_cipher;
-        memcpy(tag, rx_buf + offset, TAG_SIZE);
+        memcpy(iv, rx_buf, IV_SIZE);
+        memcpy(cipher, rx_buf + IV_SIZE, len_cipher);
 
         status = true;
     }
@@ -456,16 +437,12 @@ static bool read_timeout(uint8_t *cipher, size_t len_cipher, size_t wait_ml)
 {
     bool status = false;
 
-    int len = communication_read_timeout(rx_buf, IV_SIZE + len_cipher + TAG_SIZE, wait_ml);
+    int len = communication_read_timeout(rx_buf, IV_SIZE + len_cipher, wait_ml);
 
-    if (len == IV_SIZE + len_cipher + TAG_SIZE)
+    if (len == IV_SIZE + len_cipher)
     {
-        size_t offset = 0;
-        memcpy(iv, rx_buf + offset, IV_SIZE);
-        offset += IV_SIZE;
-        memcpy(cipher, rx_buf + offset, len_cipher);
-        offset += len_cipher;
-        memcpy(tag, rx_buf + offset, TAG_SIZE);
+        memcpy(iv, rx_buf, IV_SIZE);
+        memcpy(cipher, rx_buf + IV_SIZE, len_cipher);
 
         status = true;
     }
@@ -489,8 +466,5 @@ static bool gcm_init_psa(const uint8_t *key)
                             PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
     psa_set_key_algorithm(&attr, PSA_ALG_GCM);
 
-    psa_status_t status =
-        psa_import_key(&attr, key, AES_KEY_SIZE, &gcm_key);
-
-    return status == PSA_SUCCESS;
+    return (PSA_SUCCESS == psa_import_key(&attr, key, AES_KEY_SIZE, &gcm_key));
 }
