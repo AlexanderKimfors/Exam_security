@@ -29,6 +29,9 @@ class Communication:
         return status
     
     def receive(self, size: int) -> bytes:
+        """
+        reads exactly the length specified
+        """
         data = bytes()
         try:
             if self.__serial.is_open:

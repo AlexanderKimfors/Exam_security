@@ -33,14 +33,15 @@ void app_main(void)
             // Initilization whent wrong, do not continut.
         }
     }
+    ws2812b_set_color(RGB_LED_COLOR_GREEN);
 
     while (true)
     {
         if (!session_is_active())
         {
-            if (session_establish())
+            if (!session_establish())
             {
-                ws2812b_set_color(RGB_LED_COLOR_GREEN);
+                ws2812b_set_color(RGB_LED_COLOR_RED);
             }
         }
 
