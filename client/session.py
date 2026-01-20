@@ -173,7 +173,7 @@ class Session:
         Returns (status, timestamp, led_state)
         """
         if self.__send_request(SessionRequest.TOGGLE_LED):
-            response = self.__com.receive_2(self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__LED_STATE_SIZE + self.__TAG_SIZE)
+            response = self.__com.receive(self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__LED_STATE_SIZE + self.__TAG_SIZE)
 
             if (len(response) == (self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__LED_STATE_SIZE + self.__TAG_SIZE)):
                 offset = 0
@@ -246,10 +246,9 @@ class Session:
         status = self.__send_request(SessionRequest.GET_TEMP)
         if status:
 
-            response = self.__com.receive_2(self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE + self.__TAG_SIZE) # receive_2
+            response = self.__com.receive(self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE + self.__TAG_SIZE) # receive_2
 
             if(len(response) == self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE + self.__TAG_SIZE):
-                # ============== Unpack the msg: IV, cipher, TAG ==================
                 offset = 0
                 iv = response[offset : offset + self.__AES_IV_SIZE]
                 offset += self.__AES_IV_SIZE
@@ -299,7 +298,7 @@ class Session:
 
                 temperature = 0
                 self.__session_id = bytes([0,0,0,0,0,0,0,0])
-                
+
             else:
                 status = SessionStatus.ERROR
                 timestamp_str = ""
