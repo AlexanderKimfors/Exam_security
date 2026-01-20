@@ -31,7 +31,6 @@ class Session:
         self.__AES_KEY_SIZE = 32
         self.__SESSION_ID_SIZE = 8
         self.__TIME_STAMP_SIZE = 8
-        self.__REQ_SIZE = 1
         self.__STATUS_SIZE = 1
         self.__LED_STATE_SIZE = 1
         self.__TEMPERATURE_SIZE = 4
@@ -246,14 +245,14 @@ class Session:
         status = self.__send_request(SessionRequest.GET_TEMP)
         if status:
 
-            response = self.__com.receive(self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE + self.__TAG_SIZE) # receive_2
+            response = self.__com.receive(self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE + self.__TAG_SIZE)
 
             if(len(response) == self.__AES_IV_SIZE + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE + self.__TAG_SIZE):
                 offset = 0
                 iv = response[offset : offset + self.__AES_IV_SIZE]
                 offset += self.__AES_IV_SIZE
-                cphr = response[offset: offset + 1 + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE]
-                offset += (1 + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE)
+                cphr = response[offset: offset + self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE]
+                offset += (self.__STATUS_SIZE + self.__TIME_STAMP_SIZE + self.__TEMPERATURE_SIZE)
                 tag = response[offset : offset + self.__TAG_SIZE]
 
                 aes = cipher.AES.new(
@@ -270,7 +269,7 @@ class Session:
                 offset += self.__TIME_STAMP_SIZE
                 temp_b = plaintext[offset: offset + self.__TEMPERATURE_SIZE]
 
-                temperature = struct.unpack(">f", temp_b)[0]
+                temperature = struct.unpack("<f", temp_b)[0]
                 timestamp_sec = time_us_received / 1_000_000
                 timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_sec))
 

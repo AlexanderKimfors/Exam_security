@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="HuguGPZRIKFtp77_Nc6M" name="Page-1">
-        <mxGraphModel dx="1631" dy="-21" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="#FFFFFF" math="0" shadow="1">
+        <mxGraphModel dx="2876" dy="-352" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="#FFFFFF" math="0" shadow="1">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -11,7 +11,7 @@
                     <mxGeometry x="45" y="80" width="10" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="77" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" parent="74" vertex="1">
-                    <mxGeometry x="45" y="170" width="10" height="630" as="geometry"/>
+                    <mxGeometry x="45" y="170" width="10" height="610" as="geometry"/>
                 </mxCell>
                 <mxCell id="78" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" parent="74" vertex="1">
                     <mxGeometry x="46" y="856" width="10" height="240" as="geometry"/>
@@ -20,7 +20,7 @@
                     <mxGeometry x="720" y="1400" width="100" height="1200" as="geometry"/>
                 </mxCell>
                 <mxCell id="80" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" parent="79" vertex="1">
-                    <mxGeometry x="45" y="240" width="10" height="480" as="geometry"/>
+                    <mxGeometry x="45" y="240" width="10" height="470" as="geometry"/>
                 </mxCell>
                 <mxCell id="81" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" parent="79" vertex="1">
                     <mxGeometry x="45" y="81" width="10" height="39" as="geometry"/>
@@ -49,24 +49,18 @@
                 <mxCell id="97" value="Message request" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;rotation=-90;" parent="1" vertex="1">
                     <mxGeometry x="-43" y="2364" width="234" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="98" value="Generate random IV&lt;div&gt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;CIPHER, TAG =&amp;nbsp; AES_GCM_ENC(Request , timestamp)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="98" y="2250" width="312" height="80" as="geometry"/>
+                <mxCell id="98" value="- Generate random IV&lt;div&gt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;- CIPHER, TAG =&amp;nbsp; Encrypt Request + time_stamp with&amp;nbsp; SESSION_ID as AAD&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="97" y="2257" width="312" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="100" value="" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=1;exitY=0;exitDx=0;exitDy=5;exitPerimeter=0;" parent="1" edge="1">
                     <mxGeometry x="-0.0299" y="7" width="80" relative="1" as="geometry">
-                        <mxPoint x="96" y="2326" as="sourcePoint"/>
-                        <mxPoint x="766" y="2326" as="targetPoint"/>
+                        <mxPoint x="96" y="2311" as="sourcePoint"/>
+                        <mxPoint x="766" y="2311" as="targetPoint"/>
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="101" value="- Request = AES256GCM_DEC( IV || PSK || Cipher)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="780" y="2368" width="292" height="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="102" value="&lt;div&gt;- SES_ID shall be equal to ID&lt;/div&gt;&lt;div&gt;- SEQ = SES_SEQ&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="778" y="2319" width="263" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="105" value="- Generate random IV" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="780" y="2412" width="131" height="20" as="geometry"/>
+                <mxCell id="102" value="&lt;div&gt;- request, time_stamp[8] = decrypt CIPHER with SESSION_KEY as key and SESSION_ID as AAD&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="778" y="2319" width="292" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="108" value="&amp;nbsp;If (no valid message for 60 seconds)&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;- Session expired&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;- LED = RED&lt;br&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="772" y="2543" width="199" height="53" as="geometry"/>
@@ -86,26 +80,17 @@
                 <mxCell id="118" value="Send( IV + CIPHER + TAG )" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="335" y="1629" width="198" height="19" as="geometry"/>
                 </mxCell>
-                <mxCell id="130" value="Send( MSG )" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="394" y="2307" width="74" height="20" as="geometry"/>
+                <mxCell id="130" value="Send( IV, CIPHER, TAG )" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="370" y="2293" width="140" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="131" value="Send( MSG )" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="395" y="2431" width="81" height="20" as="geometry"/>
+                <mxCell id="131" value="Send(IV, CIPHER, TAG )" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="370" y="2431" width="135" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="136" value="- Verify Tag" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="780" y="2383" width="80" height="20" as="geometry"/>
+                <mxCell id="137" value="- validate time_stamp and execute request&lt;div&gt;&lt;font color=&quot;#000000&quot;&gt;- Generate random IV&lt;br&gt;&lt;/font&gt;&lt;div&gt;- CIPHER = encrypt status, time_stamp, request_state witch SESSION_KEY as key and SESSION_ID as AAD&lt;/div&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="778" y="2364" width="282" height="76" as="geometry"/>
                 </mxCell>
-                <mxCell id="137" value="- Prepare response" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="778" y="2397" width="110" height="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="139" value="- MSG = ID + SEQ + IV + AES_GCM_ENC( PSK, IV, Response )" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="779" y="2427" width="350" height="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="143" value="&lt;div&gt;- SES_ID shall be equal to ID&lt;/div&gt;&lt;div&gt;- SEQ = SES_SEQ&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="98" y="2462" width="174" height="30" as="geometry"/>
-                </mxCell>
-                <mxCell id="144" value="- Respons = AES256GCM_DEC( IV || PSK || Cipher)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="98" y="2489" width="292" height="20" as="geometry"/>
+                <mxCell id="143" value="&lt;div&gt;- stata, time_stamp[8], request_state = decrypt CIPHER with SESSION_KEY as key and SESSION_ID as AAD&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;log the status, time_stamp and request_state on the window&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="2462" width="220" height="98" as="geometry"/>
                 </mxCell>
                 <mxCell id="145" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="-10" y="1330" width="50" height="53" as="geometry"/>
@@ -127,34 +112,34 @@
                 </mxCell>
                 <mxCell id="156" value="Send( IV + CIPHER + TAG )" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;" parent="1" edge="1">
                     <mxGeometry width="80" relative="1" as="geometry">
-                        <mxPoint x="98" y="1957" as="sourcePoint"/>
-                        <mxPoint x="765" y="1957" as="targetPoint"/>
+                        <mxPoint x="98" y="1921" as="sourcePoint"/>
+                        <mxPoint x="765" y="1921" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="158" value="Send( IV, CIPHER, TAG )" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;" parent="1" edge="1">
                     <mxGeometry x="0.001" relative="1" as="geometry">
-                        <mxPoint x="765" y="2113" as="sourcePoint"/>
-                        <mxPoint x="95" y="2113" as="targetPoint"/>
+                        <mxPoint x="765" y="2096" as="sourcePoint"/>
+                        <mxPoint x="95" y="2096" as="targetPoint"/>
                         <Array as="points">
-                            <mxPoint x="510" y="2113"/>
+                            <mxPoint x="510" y="2096"/>
                         </Array>
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="161" value="&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;- Generate random local SESSION_KEY[32], IV[12],&amp;nbsp; RAND8]&lt;/span&gt;&lt;div&gt;&lt;div&gt;- SESSION_ID[8] = 0&lt;/div&gt;&lt;/div&gt;&lt;div&gt;- CIPHER, TAG = Encrypt SESSION_KEY + RAND with AES_GCM and use HSECRET as key and SESSION_ID as AAD&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                <mxCell id="161" value="&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;- Generate random local SESSION_KEY[32], IV[12],&amp;nbsp; RAND8]&lt;/span&gt;&lt;div&gt;&lt;div&gt;- SESSION_ID[8] = 0&lt;/div&gt;&lt;/div&gt;&lt;div&gt;- CIPHER, TAG = Encrypt SESSION_KEY + RAND with HSECRET as key and SESSION_ID as AAD&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="100" y="1570" width="350" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="163" value="&lt;div&gt;- SESSION_KEY[32], RAND[8] = decrypt CIPHER using HSECRET as key&lt;/div&gt;&lt;div&gt;- Store SESSION_KEY[32] and RAND[8] locally&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Generat random local SESSION_ID[8] and IV[12]&lt;/div&gt;&lt;div&gt;- CIPHER, TAG = Encrypt SESSION_ID[8] with AES_GCM with SESSION_KEY as key and&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;&amp;nbsp;RAND as AAD&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                <mxCell id="163" value="&lt;div&gt;- SESSION_KEY[32], RAND[8] = decrypt CIPHER using HSECRET as key&lt;/div&gt;&lt;div&gt;- Store SESSION_KEY[32] and RAND[8] locally&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Generat random local SESSION_ID[8] and IV[12]&lt;/div&gt;&lt;div&gt;- CIPHER, TAG = Encrypt SESSION_ID[8] with SESSION_KEY as key and&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;&amp;nbsp;RAND as AAD&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="780" y="1650" width="356.5" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="164" value="- SESSION_ID = decrypt CIPHER with AES_GCM using SESSION_KEY as key and RAND as AAD&lt;div&gt;- store SESSION_ID locally&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- time_stamp[8] = The current time in micro seconds&lt;/div&gt;&lt;div&gt;- Generatet random IV&lt;/div&gt;&lt;div&gt;- CIPHER, TAG = encrypt time_stamp with AES_GCM with SESSION_KEY as key and&amp;nbsp;&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;SESSION_ID as AAD&lt;/span&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="99" y="1780" width="290" height="160" as="geometry"/>
+                <mxCell id="164" value="- SESSION_ID = decrypt CIPHER&amp;nbsp;&lt;div&gt;&amp;nbsp;with SESSION_KEY as key and RAND as AAD&lt;div&gt;- store SESSION_ID locally&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- time_stamp[8] = The current time in micro seconds&lt;/div&gt;&lt;div&gt;- Generatet random IV&lt;/div&gt;&lt;div&gt;- CIPHER, TAG = encrypt time_stamp with SESSION_KEY as key and&amp;nbsp;&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;SESSION_ID as AAD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="99" y="1771" width="290" height="139" as="geometry"/>
                 </mxCell>
-                <mxCell id="165" value="- time_stamp[8] = decrypt CIPHER with AES_GCM with SESSION_KEY as key&lt;div&gt;- Set internal RTC to time_stamp&lt;/div&gt;&lt;div&gt;- Store SESSION_KEY[32] and SESSION_ID gobally&lt;/div&gt;&lt;div&gt;- Set session_state to active&lt;/div&gt;&lt;div&gt;- Set the internal LED to GREEN&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Generate random IV&lt;/div&gt;&lt;div&gt;- CIPHER, TAG_S = encrypt time_stamp with AES_GCM with&amp;nbsp;&lt;span style=&quot;background-color: transparent;&quot;&gt;&amp;nbsp;SESSION_KEY as key&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;and use SESSION_ID as AAD&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="779" y="1960" width="300" height="170" as="geometry"/>
+                <mxCell id="165" value="- time_stamp[8] = decrypt CIPHER with SESSION_KEY as key and SESSION_ID as AAD&lt;div&gt;- Set internal RTC to time_stamp&lt;/div&gt;&lt;div&gt;- Store SESSION_KEY[32] and SESSION_ID gobally&lt;/div&gt;&lt;div&gt;- Set session_state to active&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Generate random IV&lt;/div&gt;&lt;div&gt;- CIPHER, TAG_S = encrypt time_stamp with&lt;span style=&quot;background-color: transparent;&quot;&gt;&amp;nbsp;SESSION_KEY as key&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;color: rgb(63, 63, 63); background-color: transparent;&quot;&gt;and use SESSION_ID as AAD&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="779" y="1926" width="341" height="170" as="geometry"/>
                 </mxCell>
-                <mxCell id="166" value="- time_stamp_received = decrypt CIPHER with AES_GCM with SESSION_KEY as key&lt;div&gt;- Verify time_stamp == time_stamp_received&lt;/div&gt;&lt;div&gt;- Set SESSION_ID to global SESSION_ID&lt;/div&gt;&lt;div&gt;- Store SESSION_KEY[32] and SESSION_ID globally&lt;/div&gt;&lt;div&gt;- Set sesstion_state to active&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="99" y="2123" width="261" height="107" as="geometry"/>
+                <mxCell id="166" value="- time_stamp_received = decrypt CIPHER with SESSION_KEY as key and SESSION_ID as AAD&lt;div&gt;- Verify time_stamp == time_stamp_received&lt;/div&gt;&lt;div&gt;- Set SESSION_ID to global SESSION_ID&lt;/div&gt;&lt;div&gt;- Store SESSION_KEY[32] and SESSION_ID globally&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="99" y="2107" width="291" height="79" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>

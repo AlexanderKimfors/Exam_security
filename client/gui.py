@@ -42,7 +42,7 @@ class Window(QWidget):
 
         self.btn_session = QPushButton("Establish session", self)
         self.btn_session.setGeometry(BTN_1_X, BTN_Y, BTN_LENGTH, BTN_WIDTH)
-        self.btn_session.clicked.connect(self.handle_session)
+        self.btn_session.clicked.connect(self.__handle_session)
 
 
         self.btn_temp = QPushButton("Get temperature", self)
@@ -59,10 +59,10 @@ class Window(QWidget):
         self.log = QTextEdit(self)
         self.log.setReadOnly(True)
         self.log.setGeometry(
-        BTN_OFFSET,
-        BTN_Y + BTN_WIDTH + BTN_OFFSET,
-        self.width() - 2 * BTN_OFFSET,
-        self.height() - BTN_WIDTH - 3 * BTN_OFFSET
+            BTN_OFFSET,
+            BTN_Y + BTN_WIDTH + BTN_OFFSET,
+            self.width() - 2 * BTN_OFFSET,
+            self.height() - BTN_WIDTH - 3 * BTN_OFFSET
         )
 
         self.session_active = False
@@ -70,7 +70,7 @@ class Window(QWidget):
         self.__session = Session(comparam, sessionparam)
 
 
-    def handle_session(self):
+    def __handle_session(self):
         if not self.session_active:
             (status, timestamp) = self.__session.establish_session()
             if(status):

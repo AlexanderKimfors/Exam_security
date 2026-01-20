@@ -2,7 +2,7 @@
 #include "session.h"
 #include <sys/time.h>
 #include "communication.h"
-#include <stdio.h> // För sscanf i hex to bytes funktionen (kan göra på annat sätt?)
+#include <stdio.h> // For sscanf
 
 #include <esp_random.h>
 #include <bootloader_random.h>
@@ -21,13 +21,14 @@
 #define REQUEST_SIZE 1
 #define MAX_PAYLOAD_SIZE_TX (sizeof(float) + TIME_STAMP_SIZE)
 #define MAX_PAYLOAD_SIZE_RX (AES_KEY_SIZE + RAND_SIZE)
+#define STATUS_SIZE 1
 
 /* Size in bits */
 #define BYTE_SIZE 8
 
 #define UART_WAIT_TICKS 200
 
-#define SESSION_TIMEOUT_US (10ULL * 1000000ULL) // ändra 10 till 60
+#define SESSION_TIMEOUT_US (60ULL * 1000000ULL)
 
 typedef struct
 {
@@ -88,15 +89,13 @@ bool session_init()
 bool session_close(void)
 {
     bool status = false;
-    int ret;
 
-    uint8_t plaintext[1 + TIME_STAMP_SIZE];         // 1 = sizeof status
-    uint8_t cipher[1 + TIME_STAMP_SIZE + TAG_SIZE]; // 1 = status
+    uint8_t plaintext[STATUS_SIZE + TIME_STAMP_SIZE];
+    uint8_t cipher[STATUS_SIZE + TIME_STAMP_SIZE + TAG_SIZE];
 
-    // Packa ett plaintext meddelande med [status, timestamp]
     size_t offset = 0;
     plaintext[offset] = session_status;
-    offset += 1; // sizeof status
+    offset += STATUS_SIZE;
     uint8_t timestamp_b[TIME_STAMP_SIZE];
     write_be64(timestamp_b, session.latest_msg);
     memcpy(plaintext + offset, timestamp_b, TIME_STAMP_SIZE);
@@ -137,11 +136,11 @@ session_request_t session_get_request(void)
         if (decrypt(cipher, plaintext, sizeof(cipher), session.id, SESSION_ID_SIZE))
         {
             /* =================== Extract the request and time from msg ====================== */
-            uint64_t time_stamp = 0;
 
-            // memcpy(&req, plaintext, REQUEST_SIZE);
             req = (session_request_t)plaintext[0];
+
             /* Convert timestamp (big-endian) to uint64 */
+            uint64_t time_stamp = 0;
             for (int i = 0; i < TIME_STAMP_SIZE; i++)
             {
                 time_stamp = (time_stamp << BYTE_SIZE) |
@@ -191,7 +190,6 @@ bool session_establish(void)
     bool status = false;
     uint8_t psa_key[AES_KEY_SIZE];
     uint8_t session_id[SESSION_ID_SIZE] = {0};
-    int ret = 0;
 
     hex_to_bytes(HSECRET, psa_key, AES_KEY_SIZE);
 
@@ -280,10 +278,8 @@ static bool handle_handshake_2(uint8_t *key, uint8_t *session_id)
 bool session_send_temperature(bool temp_status, float temp)
 {
     bool status = false;
-    int ret;
-    size_t offset = 0;
-    float_bytes_t fb; // Ta bort?
-    fb.f = temp;      // tror jag kan ta bort?
+    float_bytes_t fb;
+    fb.f = temp;
 
     uint8_t cipher[sizeof(bool) + TIME_STAMP_SIZE + sizeof(float) + TAG_SIZE];
     uint8_t plaintext[sizeof(bool) + TIME_STAMP_SIZE + sizeof(float)];
@@ -291,11 +287,12 @@ bool session_send_temperature(bool temp_status, float temp)
     uint8_t timestamp_b[TIME_STAMP_SIZE];
     write_be64(timestamp_b, session.latest_msg);
 
-    plaintext[offset] = session_status;
+    size_t offset = 0;
+    plaintext[offset] = (int8_t)(temp_status ? SESSION_OK : SESSION_ERROR);
     offset += sizeof(temp_status);
     memcpy(plaintext + offset, timestamp_b, TIME_STAMP_SIZE);
     offset += TIME_STAMP_SIZE;
-    memcpy(plaintext + offset, &temp, sizeof(float));
+    memcpy(plaintext + offset, &fb.f, sizeof(float));
 
     if (encrypt(plaintext, cipher, sizeof(plaintext), session.id, SESSION_ID_SIZE))
     {
@@ -307,16 +304,13 @@ bool session_send_temperature(bool temp_status, float temp)
 
 bool session_send_toggle_led(bool status, int state)
 {
-    int ret;
-    size_t offset = 0;
-
     uint8_t cipher[sizeof(bool) + TIME_STAMP_SIZE + sizeof(bool) + TAG_SIZE];
     uint8_t plaintext[sizeof(bool) + TIME_STAMP_SIZE + sizeof(bool)];
 
     uint8_t timestamp_b[TIME_STAMP_SIZE];
     write_be64(timestamp_b, session.latest_msg);
 
-    plaintext[0] = status ? SESSION_OK : SESSION_ERROR;
+    plaintext[0] = (int8_t)(status ? SESSION_OK : SESSION_ERROR);
     memcpy(plaintext + sizeof(bool), timestamp_b, TIME_STAMP_SIZE);
     plaintext[sizeof(bool) + TIME_STAMP_SIZE] = state;
 
